@@ -55,24 +55,52 @@ class FloatingNode {
         this.maxTimer = this.timer;
         this.connected = false;
         this.bodyNode = null;
+        this.connectionTime = 0; // 连接开始时间
+        this.beingAbsorbed = false; // 是否正在被吸收
     }
 
     update() {
-        // 随机游走
-        this.vx += random(-0.1, 0.1);
-        this.vy += random(-0.1, 0.1);
+        // 检查是否需要被吸收（连接超过5秒）
+        if (this.connected && !this.beingAbsorbed && this.bodyNode) {
+            let connectedDuration = millis() - this.connectionTime;
+            if (connectedDuration > 5000) { // 5秒
+                this.beingAbsorbed = true;
+            }
+        }
 
-        // 限制速度
-        this.vx = constrain(this.vx, -2, 2);
-        this.vy = constrain(this.vx, -2, 2);
+        // 如果正在被吸收，向身体节点移动
+        if (this.beingAbsorbed && this.bodyNode) {
+            let dx = this.bodyNode.x - this.x;
+            let dy = this.bodyNode.y - this.y;
+            let distance = sqrt(dx * dx + dy * dy);
 
-        // 更新位置
-        this.x += this.vx;
-        this.y += this.vy;
+            if (distance < 5) {
+                // 到达身体节点，融合
+                this.absorbIntoBodyNode();
+                return; // 立即返回，不再执行其他逻辑
+            } else {
+                // 向身体节点移动
+                let speed = 0.1;
+                this.x += dx * speed;
+                this.y += dy * speed;
+            }
+        } else if (!this.beingAbsorbed) {
+            // 正常游走逻辑
+            this.vx += random(-0.1, 0.1);
+            this.vy += random(-0.1, 0.1);
 
-        // 边界检查
-        if (this.x < 0 || this.x > width) this.vx *= -1;
-        if (this.y < 0 || this.y > height) this.vy *= -1;
+            // 限制速度
+            this.vx = constrain(this.vx, -2, 2);
+            this.vy = constrain(this.vy, -2, 2);
+
+            // 更新位置
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // 边界检查
+            if (this.x < 0 || this.x > width) this.vx *= -1;
+            if (this.y < 0 || this.y > height) this.vy *= -1;
+        }
 
         // 更新timer
         if (!this.connected) {
@@ -91,6 +119,26 @@ class FloatingNode {
     applyForce(force) {
         this.vx += force.x;
         this.vy += force.y;
+    }
+
+    // 融合到身体节点
+    absorbIntoBodyNode() {
+        if (this.bodyNode) {
+            // 增大身体节点的大小
+            this.bodyNode.size += 1; // 每次融合增大1像素
+
+            // 从身体节点的连接列表中移除
+            let indexInBody = this.bodyNode.connectedNodes.indexOf(this);
+            if (indexInBody > -1) {
+                this.bodyNode.connectedNodes.splice(indexInBody, 1);
+            }
+
+            // 从浮动节点数组中移除
+            let indexInFloating = floatingNodes.indexOf(this);
+            if (indexInFloating > -1) {
+                floatingNodes.splice(indexInFloating, 1);
+            }
+        }
     }
 
     display() {
@@ -221,6 +269,7 @@ function checkInteractions() {
                     if (d < 20 && !floatingNode.connected) {
                         floatingNode.connected = true;
                         floatingNode.bodyNode = bodyNode;
+                        floatingNode.connectionTime = millis(); // 记录连接时间
                         bodyNode.connectedNodes.push(floatingNode);
                         floatingNode.timer = floatingNode.maxTimer; // 重置timer
                     }
@@ -244,6 +293,12 @@ function checkConnectionDistance() {
     for (let bodyNode of bodyNodes) {
         for (let i = bodyNode.connectedNodes.length - 1; i >= 0; i--) {
             let connectedNode = bodyNode.connectedNodes[i];
+
+            // 跳过正在被吸收的节点
+            if (connectedNode.beingAbsorbed) {
+                continue;
+            }
+
             let d = distance(bodyNode.x, bodyNode.y, connectedNode.x, connectedNode.y);
 
             if (d > maxConnectionDistance) {
