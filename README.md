@@ -1,68 +1,68 @@
-# Prototype A - Interactive Body Node System
+# 原型A - 身体节点交互系统
 
-An interactive body node visualization project based on p5.js that explores social connections through abstract representations of human bodies and relationships.
+这是一个基于p5.js的交互式身体节点可视化项目。
 
-## Features
+## 功能特性
 
-- **Body Node Structure**: Human body composed of interconnected nodes (head, torso, arms, legs)
-- **WASD Controls**: Move the entire body structure using keyboard WASD keys
-- **Floating Nodes**: Colorful nodes that float around with random movement and lifespans
-- **Interaction Mechanics**:
-  - Same color nodes attract and connect when close
-  - Different color nodes repel each other
-  - **Distance Disconnect**: Connections break automatically if distance exceeds 500 pixels, nodes fade quickly
-- **Timer System**: Each floating node has a random lifespan of 15-25 seconds
-- **Connection Refresh**: Connecting with same-color nodes resets the timer
-- **Disappearance**: Nodes vanish when all connected same-color nodes' timers run out
+- **人体节点结构**: 由头部、躯干、手臂、腿部等节点组成的身体结构
+- **WASD控制**: 使用键盘WASD键移动整个身体节点结构
+- **浮动节点**: 周围漂浮的彩色节点，具有随机运动和生命周期
+- **交互机制**:
+  - 相同颜色节点靠近时会相互吸引并连接
+  - 不同颜色节点靠近时会产生斥力
+  - **距离断开**: 连接后如果距离超过80像素会自动断开，那个节点会快速消失
+- **Timer机制**: 每个浮动节点有15-25秒的随机生命周期
+- **连接刷新**: 相同颜色节点连接时会重置timer
+- **消失机制**: 当连接的同色节点timer全部归零时，节点消失
 
-## Online Experience
+## 在线体验
 
-Experience the interactive visualization directly in your browser: [https://fuxiangzhai.github.io/Ephemeral-IP/](https://fuxiangzhai.github.io/Ephemeral-IP/)
+直接在浏览器中访问：[GitHub Pages链接]
 
-Or run locally:
-1. Download the project files
-2. Start a local server:
+或者本地运行：
+1. 下载项目文件
+2. 启动本地服务器：
    ```bash
    python3 -m http.server 8000
    ```
-3. Open in browser:
+3. 在浏览器中打开：
    ```
    http://localhost:8000
    ```
 
-The experience automatically adapts to full screen and supports window resizing.
+游戏会自动全屏显示，支持窗口大小调整
 
-## Controls
+## 控制方式
 
-- **WASD Keys**: Move the body node structure
-  - **W**: Move up
-  - **S**: Move down
-  - **A**: Move left
-  - **D**: Move right
-  - **Combination Keys**: Press multiple keys simultaneously for diagonal movement (WD, WA, SA, SD)
-- Natural deceleration with friction
-- Boundary constraints prevent moving outside screen limits
-- **Full-screen Support**: Automatically adapts to browser window size
+- **WASD键**: 移动身体节点结构
+  - **W**: 向上移动
+  - **S**: 向下移动
+  - **A**: 向左移动
+  - **D**: 向右移动
+  - **支持组合键**: 可以同时按下两个键进行斜向运动（如WD、WA、SA、SD）
+- 身体会自动停下来（有摩擦力）
+- 边界限制：身体不能移出屏幕边界
+- **全屏支持**: 游戏自动适应浏览器窗口大小
 
-## Visual Effects
+## 视觉效果
 
-- **Body Nodes**: Large colorful circular nodes without borders, representing human body structure
-- **Floating Nodes**: Diverse closed shapes (circles, ellipses, triangles, squares, pentagons) of varying sizes without borders, representing different people
-- Pulsing connection lines
-- Node transparency changes over time
-- New nodes spawn automatically at regular intervals
+- **身体节点**: 彩色圆形节点，尺寸较大，无描边，代表人体结构
+- **浮动节点**: 形形色色的封闭图形（圆形、椭圆、三角形、方形、五边形），大小不一，无描边，代表不同的人
+- 连接线有脉动效果
+- 节点透明度随时间变化
+- 定期自动生成新节点
 
-## Tech Stack
+## 技术栈
 
-- **p5.js**: Graphics rendering and interaction
-- **JavaScript ES6**: Modern JavaScript syntax
-- **HTML5 Canvas**: Graphics drawing
+- **p5.js**: 用于图形渲染和交互
+- **JavaScript ES6**: 现代JavaScript语法
+- **HTML5 Canvas**: 图形绘制
 
-## Project Structure
+## 项目结构
 
 ```
 prototype A/
-├── index.html      # Main page
-├── sketch.js       # Core logic code
-└── README.md       # Project documentation
+├── index.html      # 主页面
+├── sketch.js       # 主要逻辑代码
+└── README.md       # 项目说明
 ```
