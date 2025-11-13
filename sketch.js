@@ -181,6 +181,27 @@ function distance(x1, y1, x2, y2) {
     return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
 }
 
+// 绘制背景文字
+function drawBackgroundText() {
+    // 设置文字样式
+    textAlign(CENTER, CENTER);
+    textSize(min(width, height) * 0.15); // 文字大小根据屏幕大小调整
+
+    // 使用半透明的白色
+    fill(255, 255, 255, 30); // 白色，30/255的透明度
+    noStroke();
+
+    // 在屏幕中心绘制文字
+    text('Ephemeral-IP', width/2, height/2);
+
+    // 可选：添加轻微的模糊效果（通过绘制多个层）
+    for (let i = 0; i < 3; i++) {
+        fill(255, 255, 255, 15 - i * 3); // 越来越透明
+        textSize(min(width, height) * (0.15 + i * 0.02)); // 稍微不同的尺寸
+        text('Ephemeral-IP', width/2, height/2);
+    }
+}
+
 // 检查交互
 function checkInteractions() {
     for (let bodyNode of bodyNodes) {
@@ -255,6 +276,9 @@ function windowResized() {
 
 function draw() {
     background(0);
+
+    // 绘制背景文字
+    drawBackgroundText();
 
     // 更新人体位置 - 支持同时按多个键进行斜向运动
     let moveX = 0;
@@ -336,9 +360,9 @@ function draw() {
     noStroke();
     textAlign(LEFT);
     textSize(12);
-    text(`人体节点: ${bodyNodes.length}`, 10, height - 40);
-    text(`浮动节点: ${floatingNodes.length}`, 10, height - 25);
-    text(`连接数: ${bodyNodes.reduce((sum, node) => sum + node.connectedNodes.length, 0)}`, 10, height - 10);
+    text(`bodyNodes: ${bodyNodes.length}`, 10, height - 40);
+    text(`floatingNodes: ${floatingNodes.length}`, 10, height - 25);
+    text(`connectedNodes: ${bodyNodes.reduce((sum, node) => sum + node.connectedNodes.length, 0)}`, 10, height - 10);
 }
 
 function keyPressed() {
