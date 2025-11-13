@@ -145,25 +145,25 @@ function createBodyStructure() {
     bodyNodes = [];
 
     // 头部
-    bodyNodes.push(new BodyNode(0, -80, '王小仪', colors[0]));
+    bodyNodes.push(new BodyNode(0, -80, '头部', colors[0]));
 
     // 躯干
     bodyNodes.push(new BodyNode(0, -40, '躯干', colors[1]));
 
     // 左臂
     bodyNodes.push(new BodyNode(-30, -50, '左臂', colors[2]));
-    bodyNodes.push(new BodyNode(-50, -30, '左手', colors[3]));
+    bodyNodes.push(new BodyNode(-50, -30, '左手', colors[2]));
 
     // 右臂
-    bodyNodes.push(new BodyNode(30, -50, '右臂', colors[2]));
+    bodyNodes.push(new BodyNode(30, -50, '右臂', colors[3]));
     bodyNodes.push(new BodyNode(50, -30, '右手', colors[3]));
 
     // 左腿
     bodyNodes.push(new BodyNode(-15, 20, '左腿', colors[4]));
-    bodyNodes.push(new BodyNode(-15, 60, '左脚', colors[5]));
+    bodyNodes.push(new BodyNode(-15, 60, '左脚', colors[4]));
 
     // 右腿
-    bodyNodes.push(new BodyNode(15, 20, '右腿', colors[4]));
+    bodyNodes.push(new BodyNode(15, 20, '右腿', colors[5]));
     bodyNodes.push(new BodyNode(15, 60, '右脚', colors[5]));
 }
 
