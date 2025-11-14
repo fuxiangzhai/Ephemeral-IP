@@ -88,11 +88,11 @@ class BodyNode {
 
     // 更新为MediaPipe Pose数据
     updateFromPose(poseKeypoint, scaleX = 1, scaleY = 1, offsetX = 0, offsetY = 0) {
-        if (poseKeypoint && poseKeypoint.confidence > 0.3) { // 置信度阈值
+        if (poseKeypoint && poseKeypoint.visibility > 0.3) { // 可见度阈值
             // MediaPipe返回0-1标准化坐标，需要转换为像素坐标
             this.x = poseKeypoint.x * scaleX + offsetX;
             this.y = poseKeypoint.y * scaleY + offsetY;
-            this.confidence = poseKeypoint.confidence;
+            this.confidence = poseKeypoint.visibility; // 使用visibility作为置信度
             this.isPoseNode = true;
         } else {
             // 如果检测不到，保持当前位置但降低置信度
@@ -363,7 +363,7 @@ function updateBodyNodesFromPose() {
             let keypoint = {
                 x: landmark.x,
                 y: landmark.y,
-                confidence: landmark.visibility || 0.5  // 使用visibility作为置信度
+                visibility: landmark.visibility || 0.5  // 使用visibility作为置信度
             };
 
             node.updateFromPose(keypoint, scaleX, scaleY, offsetX, offsetY);
