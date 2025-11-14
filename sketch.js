@@ -6,37 +6,54 @@ let bodyPosition = { x: 400, y: 300 };
 let bodyVelocity = { x: 0, y: 0 };
 let lastSpawnTime = 0;
 
-// 姿势检测相关
+// MediaPipe Pose相关
 let video;
-let poseNet;
-let poses = [];
+let pose;
+let camera;
+let poseResults = null;
 let poseReady = false;
 
 // 颜色定义
 const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
 
-// PoseNet关键点索引
+// MediaPipe Pose关键点索引 (33个关键点)
 const POSE_KEYPOINTS = {
     nose: 0,
-    leftEye: 1,
-    rightEye: 2,
-    leftEar: 3,
-    rightEar: 4,
-    leftShoulder: 5,
-    rightShoulder: 6,
-    leftElbow: 7,
-    rightElbow: 8,
-    leftWrist: 9,
-    rightWrist: 10,
-    leftHip: 11,
-    rightHip: 12,
-    leftKnee: 13,
-    rightKnee: 14,
-    leftAnkle: 15,
-    rightAnkle: 16
+    leftEyeInner: 1,
+    leftEye: 2,
+    leftEyeOuter: 3,
+    rightEyeInner: 4,
+    rightEye: 5,
+    rightEyeOuter: 6,
+    leftEar: 7,
+    rightEar: 8,
+    mouthLeft: 9,
+    mouthRight: 10,
+    leftShoulder: 11,
+    rightShoulder: 12,
+    leftElbow: 13,
+    rightElbow: 14,
+    leftWrist: 15,
+    rightWrist: 16,
+    leftPinky: 17,
+    rightPinky: 18,
+    leftIndex: 19,
+    rightIndex: 20,
+    leftThumb: 21,
+    rightThumb: 22,
+    leftHip: 23,
+    rightHip: 24,
+    leftKnee: 25,
+    rightKnee: 26,
+    leftAnkle: 27,
+    rightAnkle: 28,
+    leftHeel: 29,
+    rightHeel: 30,
+    leftFootIndex: 31,
+    rightFootIndex: 32
 };
 
-// 人体关键点映射到我们的身体节点系统
+// 人体关键点映射到我们的身体节点系统 (选择主要的关键点)
 const BODY_NODE_MAPPING = [
     { poseIndex: POSE_KEYPOINTS.nose, label: '头部', colorIndex: 0 },
     { poseIndex: POSE_KEYPOINTS.leftShoulder, label: '左肩', colorIndex: 2 },
@@ -69,9 +86,10 @@ class BodyNode {
         this.isPoseNode = false; // 是否为姿势节点
     }
 
-    // 更新为PoseNet数据
+    // 更新为MediaPipe Pose数据
     updateFromPose(poseKeypoint, scaleX = 1, scaleY = 1, offsetX = 0, offsetY = 0) {
         if (poseKeypoint && poseKeypoint.confidence > 0.3) { // 置信度阈值
+            // MediaPipe返回0-1标准化坐标，需要转换为像素坐标
             this.x = poseKeypoint.x * scaleX + offsetX;
             this.y = poseKeypoint.y * scaleY + offsetY;
             this.confidence = poseKeypoint.confidence;
@@ -260,7 +278,7 @@ class FloatingNode {
 }
 
 // 创建人体结构
-// 创建基于PoseNet的真实身体结构
+// 创建基于MediaPipe Pose的真实身体结构
 function createPoseBasedBodyStructure() {
     bodyNodes = [];
 
@@ -322,24 +340,32 @@ function distance(x1, y1, x2, y2) {
     return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
 }
 
-// 更新身体节点基于PoseNet数据
+// 更新身体节点基于MediaPipe Pose数据
 function updateBodyNodesFromPose() {
-    if (!poseReady || poses.length === 0 || !poses[0].pose) {
+    if (!poseReady || !poseResults || !poseResults.poseLandmarks) {
         return;
     }
 
-    let pose = poses[0].pose;
+    let landmarks = poseResults.poseLandmarks;
 
     // 计算缩放和偏移以适应屏幕
-    let scaleX = width / 320;  // 视频宽度320
-    let scaleY = height / 240; // 视频高度240
+    let scaleX = width;   // MediaPipe返回的是0-1的标准化坐标
+    let scaleY = height;
     let offsetX = 0;
     let offsetY = 0;
 
     // 更新每个身体节点
     for (let node of bodyNodes) {
-        if (node.poseIndex >= 0 && node.poseIndex < pose.keypoints.length) {
-            let keypoint = pose.keypoints[node.poseIndex];
+        if (node.poseIndex >= 0 && node.poseIndex < landmarks.length) {
+            let landmark = landmarks[node.poseIndex];
+
+            // MediaPipe landmark包含x, y, z, visibility
+            let keypoint = {
+                x: landmark.x,
+                y: landmark.y,
+                confidence: landmark.visibility || 0.5  // 使用visibility作为置信度
+            };
+
             node.updateFromPose(keypoint, scaleX, scaleY, offsetX, offsetY);
         }
     }
@@ -430,48 +456,88 @@ function checkConnectionDistance() {
     }
 }
 
-// PoseNet模型加载完成回调
-function modelLoaded() {
-    console.log('PoseNet model loaded!');
-    document.getElementById('status').textContent = 'Model loaded, starting detection...';
-}
-
-// 姿势检测结果回调
-function gotPoses(results) {
-    poses = results;
-    if (poses.length > 0 && poses[0].pose) {
+// MediaPipe Pose结果回调
+function onPoseResults(results) {
+    poseResults = results;
+    if (results.poseLandmarks) {
         poseReady = true;
-        document.getElementById('status').textContent = `Pose detected: ${poses[0].pose.keypoints.length} keypoints`;
+        document.getElementById('status').textContent = `Pose detected: ${results.poseLandmarks.length} keypoints`;
     } else {
         poseReady = false;
         document.getElementById('status').textContent = 'No pose detected';
     }
 }
 
-function setup() {
+// 初始化MediaPipe Pose
+async function initMediaPipePose() {
+    try {
+        // 创建Pose实例
+        pose = new Pose({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+            }
+        });
+
+        // 配置Pose选项
+        pose.setOptions({
+            selfieMode: true,        // 自拍模式（镜像）
+            modelComplexity: 1,      // 模型复杂度 (0,1,2)
+            smoothLandmarks: true,   // 平滑关键点
+            enableSegmentation: false, // 不需要分割
+            smoothSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        // 设置结果回调
+        pose.onResults(onPoseResults);
+
+        console.log('MediaPipe Pose initialized successfully!');
+        document.getElementById('status').textContent = 'MediaPipe Pose loaded, initializing camera...';
+
+    } catch (error) {
+        console.error('Failed to initialize MediaPipe Pose:', error);
+        document.getElementById('status').textContent = 'Failed to load MediaPipe Pose';
+    }
+}
+
+async function setup() {
     createCanvas(windowWidth, windowHeight);
+
+    // 初始化MediaPipe Pose
+    await initMediaPipePose();
 
     // 初始化摄像头
     video = createCapture(VIDEO);
-    video.size(320, 240);
+    video.size(640, 480); // MediaPipe推荐的尺寸
     video.hide();
 
-    // 将视频元素添加到HTML容器中
+    // 将视频元素添加到HTML容器中（可选）
     let videoElement = document.getElementById('video');
     if (videoElement) {
         videoElement.srcObject = video.elt.srcObject;
     }
 
-    // 初始化PoseNet
-    poseNet = ml5.poseNet(video, modelLoaded);
-    poseNet.on('pose', gotPoses);
+    // 创建MediaPipe Camera
+    camera = new Camera(video.elt, {
+        onFrame: async () => {
+            if (pose) {
+                await pose.send({ image: video.elt });
+            }
+        },
+        width: 640,
+        height: 480
+    });
+
+    // 启动摄像头
+    camera.start();
 
     // 设置身体初始位置在屏幕中心
     bodyPosition = { x: width/2, y: height/2 };
     createDefaultBodyStructure();
     createFloatingNodes();
 
-    document.getElementById('status').textContent = 'Initializing camera...';
+    document.getElementById('status').textContent = 'Camera starting...';
 }
 
 function windowResized() {
