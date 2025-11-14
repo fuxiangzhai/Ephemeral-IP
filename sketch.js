@@ -15,27 +15,42 @@ let poseReady = false;
 // 颜色定义
 const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
 
-// 人体关键点映射 (PoseNet 17个关键点)
-const POSE_CONNECTIONS = [
-    [5, 6],   // shoulders
-    [5, 7],   // left upper arm
-    [7, 9],   // left lower arm
-    [6, 8],   // right upper arm
-    [8, 10],  // right lower arm
-    [5, 11],  // left torso
-    [6, 12],  // right torso
-    [11, 12], // waist
-    [11, 13], // left upper leg
-    [13, 15], // left lower leg
-    [12, 14], // right upper leg
-    [14, 16]  // right lower leg
-];
+// PoseNet关键点索引
+const POSE_KEYPOINTS = {
+    nose: 0,
+    leftEye: 1,
+    rightEye: 2,
+    leftEar: 3,
+    rightEar: 4,
+    leftShoulder: 5,
+    rightShoulder: 6,
+    leftElbow: 7,
+    rightElbow: 8,
+    leftWrist: 9,
+    rightWrist: 10,
+    leftHip: 11,
+    rightHip: 12,
+    leftKnee: 13,
+    rightKnee: 14,
+    leftAnkle: 15,
+    rightAnkle: 16
+};
 
-const POSE_LABELS = [
-    "nose", "leftEye", "rightEye", "leftEar", "rightEar",
-    "leftShoulder", "rightShoulder", "leftElbow", "rightElbow",
-    "leftWrist", "rightWrist", "leftHip", "rightHip",
-    "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"
+// 人体关键点映射到我们的身体节点系统
+const BODY_NODE_MAPPING = [
+    { poseIndex: POSE_KEYPOINTS.nose, label: '头部', colorIndex: 0 },
+    { poseIndex: POSE_KEYPOINTS.leftShoulder, label: '左肩', colorIndex: 2 },
+    { poseIndex: POSE_KEYPOINTS.rightShoulder, label: '右肩', colorIndex: 3 },
+    { poseIndex: POSE_KEYPOINTS.leftElbow, label: '左肘', colorIndex: 2 },
+    { poseIndex: POSE_KEYPOINTS.rightElbow, label: '右肘', colorIndex: 3 },
+    { poseIndex: POSE_KEYPOINTS.leftWrist, label: '左手', colorIndex: 2 },
+    { poseIndex: POSE_KEYPOINTS.rightWrist, label: '右手', colorIndex: 3 },
+    { poseIndex: POSE_KEYPOINTS.leftHip, label: '左髋', colorIndex: 4 },
+    { poseIndex: POSE_KEYPOINTS.rightHip, label: '右髋', colorIndex: 5 },
+    { poseIndex: POSE_KEYPOINTS.leftKnee, label: '左膝', colorIndex: 4 },
+    { poseIndex: POSE_KEYPOINTS.rightKnee, label: '右膝', colorIndex: 5 },
+    { poseIndex: POSE_KEYPOINTS.leftAnkle, label: '左脚', colorIndex: 4 },
+    { poseIndex: POSE_KEYPOINTS.rightAnkle, label: '右脚', colorIndex: 5 }
 ];
 
 // 人体节点类
@@ -49,24 +64,51 @@ class BodyNode {
         this.color = color;
         this.size = 8;
         this.connectedNodes = [];
+        this.poseIndex = -1; // PoseNet关键点索引
+        this.confidence = 0; // 检测置信度
+        this.isPoseNode = false; // 是否为姿势节点
     }
 
+    // 更新为PoseNet数据
+    updateFromPose(poseKeypoint, scaleX = 1, scaleY = 1, offsetX = 0, offsetY = 0) {
+        if (poseKeypoint && poseKeypoint.confidence > 0.3) { // 置信度阈值
+            this.x = poseKeypoint.x * scaleX + offsetX;
+            this.y = poseKeypoint.y * scaleY + offsetY;
+            this.confidence = poseKeypoint.confidence;
+            this.isPoseNode = true;
+        } else {
+            // 如果检测不到，保持当前位置但降低置信度
+            this.confidence *= 0.95;
+            this.isPoseNode = false;
+        }
+    }
+
+    // 传统的位置更新（备用）
     update(position) {
-        this.x = position.x + this.originalX;
-        this.y = position.y + this.originalY;
+        if (!this.isPoseNode) {
+            this.x = position.x + this.originalX;
+            this.y = position.y + this.originalY;
+        }
     }
 
     display() {
-        fill(this.color);
+        // 根据置信度调整透明度
+        let alpha = this.isPoseNode ? this.confidence * 255 : 150;
+        let c = color(this.color);
+        c.setAlpha(alpha);
+
+        fill(c);
         noStroke();
         ellipse(this.x, this.y, this.size * 1.5, this.size * 1.5);
 
-        // 显示标签
-        fill(255);
-        noStroke();
-        textAlign(CENTER);
-        textSize(10);
-        text(this.label, this.x, this.y - 20);
+        // 显示标签（只有在高置信度时）
+        if (this.confidence > 0.5 || !this.isPoseNode) {
+            fill(255, alpha);
+            noStroke();
+            textAlign(CENTER);
+            textSize(10);
+            text(this.label, this.x, this.y - 20);
+        }
     }
 }
 
@@ -218,7 +260,20 @@ class FloatingNode {
 }
 
 // 创建人体结构
-function createBodyStructure() {
+// 创建基于PoseNet的真实身体结构
+function createPoseBasedBodyStructure() {
+    bodyNodes = [];
+
+    // 根据BODY_NODE_MAPPING创建身体节点
+    for (let mapping of BODY_NODE_MAPPING) {
+        let node = new BodyNode(0, 0, mapping.label, colors[mapping.colorIndex]);
+        node.poseIndex = mapping.poseIndex;
+        bodyNodes.push(node);
+    }
+}
+
+// 创建默认的虚拟身体结构（备用）
+function createDefaultBodyStructure() {
     bodyNodes = [];
 
     // 头部
@@ -244,6 +299,15 @@ function createBodyStructure() {
     bodyNodes.push(new BodyNode(15, 60, '右脚', colors[5]));
 }
 
+// 兼容性函数
+function createBodyStructure() {
+    if (poseReady && poses.length > 0) {
+        createPoseBasedBodyStructure();
+    } else {
+        createDefaultBodyStructure();
+    }
+}
+
 // 创建浮动节点
 function createFloatingNodes() {
     for (let i = 0; i < 20; i++) {
@@ -256,6 +320,29 @@ function createFloatingNodes() {
 // 计算距离
 function distance(x1, y1, x2, y2) {
     return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+}
+
+// 更新身体节点基于PoseNet数据
+function updateBodyNodesFromPose() {
+    if (!poseReady || poses.length === 0 || !poses[0].pose) {
+        return;
+    }
+
+    let pose = poses[0].pose;
+
+    // 计算缩放和偏移以适应屏幕
+    let scaleX = width / 320;  // 视频宽度320
+    let scaleY = height / 240; // 视频高度240
+    let offsetX = 0;
+    let offsetY = 0;
+
+    // 更新每个身体节点
+    for (let node of bodyNodes) {
+        if (node.poseIndex >= 0 && node.poseIndex < pose.keypoints.length) {
+            let keypoint = pose.keypoints[node.poseIndex];
+            node.updateFromPose(keypoint, scaleX, scaleY, offsetX, offsetY);
+        }
+    }
 }
 
 // 绘制背景文字
@@ -400,33 +487,46 @@ function draw() {
     // 绘制背景文字
     drawBackgroundText();
 
-    // 更新人体位置 - 支持同时按多个键进行斜向运动
-    let moveX = 0;
-    let moveY = 0;
+    // 更新身体节点基于PoseNet数据
+    updateBodyNodesFromPose();
 
-    if (keyIsDown(87) || keyIsDown(119)) moveY -= 0.48; // W 或 w
-    if (keyIsDown(83) || keyIsDown(115)) moveY += 0.48; // S 或 s
-    if (keyIsDown(65) || keyIsDown(97)) moveX -= 0.48;  // A 或 a
-    if (keyIsDown(68) || keyIsDown(100)) moveX += 0.48; // D 或 d
+    // 如果没有姿势检测，使用WASD控制
+    if (!poseReady) {
+        // 更新人体位置 - 支持同时按多个键进行斜向运动
+        let moveX = 0;
+        let moveY = 0;
 
-    bodyVelocity.x += moveX;
-    bodyVelocity.y += moveY;
+        if (keyIsDown(87) || keyIsDown(119)) moveY -= 0.48; // W 或 w
+        if (keyIsDown(83) || keyIsDown(115)) moveY += 0.48; // S 或 s
+        if (keyIsDown(65) || keyIsDown(97)) moveX -= 0.48;  // A 或 a
+        if (keyIsDown(68) || keyIsDown(100)) moveX += 0.48; // D 或 d
 
-    // 应用摩擦力
-    bodyVelocity.x *= 0.92;
-    bodyVelocity.y *= 0.92;
+        bodyVelocity.x += moveX;
+        bodyVelocity.y += moveY;
 
-    // 更新位置
-    bodyPosition.x += bodyVelocity.x;
-    bodyPosition.y += bodyVelocity.y;
+        // 应用摩擦力
+        bodyVelocity.x *= 0.92;
+        bodyVelocity.y *= 0.92;
 
-    // 限制边界
-    bodyPosition.x = constrain(bodyPosition.x, 100, width - 100);
-    bodyPosition.y = constrain(bodyPosition.y, 100, height - 100);
+        // 更新位置
+        bodyPosition.x += bodyVelocity.x;
+        bodyPosition.y += bodyVelocity.y;
 
-    // 更新人体节点
-    for (let node of bodyNodes) {
-        node.update(bodyPosition);
+        // 限制边界
+        bodyPosition.x = constrain(bodyPosition.x, 100, width - 100);
+        bodyPosition.y = constrain(bodyPosition.y, 100, height - 100);
+
+        // 更新人体节点
+        for (let node of bodyNodes) {
+            node.update(bodyPosition);
+        }
+    } else {
+        // 如果有姿势检测，确保所有节点都更新为最新姿势
+        for (let node of bodyNodes) {
+            if (!node.isPoseNode) {
+                node.update(bodyPosition);
+            }
+        }
     }
 
     // 检查交互
