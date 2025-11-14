@@ -6,8 +6,37 @@ let bodyPosition = { x: 400, y: 300 };
 let bodyVelocity = { x: 0, y: 0 };
 let lastSpawnTime = 0;
 
+// 姿势检测相关
+let video;
+let poseNet;
+let poses = [];
+let poseReady = false;
+
 // 颜色定义
 const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+
+// 人体关键点映射 (PoseNet 17个关键点)
+const POSE_CONNECTIONS = [
+    [5, 6],   // shoulders
+    [5, 7],   // left upper arm
+    [7, 9],   // left lower arm
+    [6, 8],   // right upper arm
+    [8, 10],  // right lower arm
+    [5, 11],  // left torso
+    [6, 12],  // right torso
+    [11, 12], // waist
+    [11, 13], // left upper leg
+    [13, 15], // left lower leg
+    [12, 14], // right upper leg
+    [14, 16]  // right lower leg
+];
+
+const POSE_LABELS = [
+    "nose", "leftEye", "rightEye", "leftEar", "rightEar",
+    "leftShoulder", "rightShoulder", "leftElbow", "rightElbow",
+    "leftWrist", "rightWrist", "leftHip", "rightHip",
+    "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"
+];
 
 // 人体节点类
 class BodyNode {
@@ -314,12 +343,48 @@ function checkConnectionDistance() {
     }
 }
 
+// PoseNet模型加载完成回调
+function modelLoaded() {
+    console.log('PoseNet model loaded!');
+    document.getElementById('status').textContent = 'Model loaded, starting detection...';
+}
+
+// 姿势检测结果回调
+function gotPoses(results) {
+    poses = results;
+    if (poses.length > 0 && poses[0].pose) {
+        poseReady = true;
+        document.getElementById('status').textContent = `Pose detected: ${poses[0].pose.keypoints.length} keypoints`;
+    } else {
+        poseReady = false;
+        document.getElementById('status').textContent = 'No pose detected';
+    }
+}
+
 function setup() {
     createCanvas(windowWidth, windowHeight);
+
+    // 初始化摄像头
+    video = createCapture(VIDEO);
+    video.size(320, 240);
+    video.hide();
+
+    // 将视频元素添加到HTML容器中
+    let videoElement = document.getElementById('video');
+    if (videoElement) {
+        videoElement.srcObject = video.elt.srcObject;
+    }
+
+    // 初始化PoseNet
+    poseNet = ml5.poseNet(video, modelLoaded);
+    poseNet.on('pose', gotPoses);
+
     // 设置身体初始位置在屏幕中心
     bodyPosition = { x: width/2, y: height/2 };
-    createBodyStructure();
+    createDefaultBodyStructure();
     createFloatingNodes();
+
+    document.getElementById('status').textContent = 'Initializing camera...';
 }
 
 function windowResized() {
@@ -415,9 +480,10 @@ function draw() {
     noStroke();
     textAlign(LEFT);
     textSize(12);
-    text(`bodyNodes: ${bodyNodes.length}`, 10, height - 40);
-    text(`floatingNodes: ${floatingNodes.length}`, 10, height - 25);
-    text(`connectedNodes: ${bodyNodes.reduce((sum, node) => sum + node.connectedNodes.length, 0)}`, 10, height - 10);
+    text(`bodyNodes: ${bodyNodes.length}`, 10, height - 55);
+    text(`floatingNodes: ${floatingNodes.length}`, 10, height - 40);
+    text(`connectedNodes: ${bodyNodes.reduce((sum, node) => sum + node.connectedNodes.length, 0)}`, 10, height - 25);
+    text(`poseReady: ${poseReady}`, 10, height - 10);
 }
 
 function keyPressed() {
