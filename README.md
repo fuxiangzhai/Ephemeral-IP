@@ -17,7 +17,14 @@
 
 ## 🚀 快速开始
 
-### 1. 启动本地服务器
+### 🌐 在线体验
+
+体验最新的交互式身体可视化：
+**[https://fuxiangzhai.github.io/Ephemeral-IP/](https://fuxiangzhai.github.io/Ephemeral-IP/)**
+
+### 💻 本地开发
+
+#### 1. 启动本地服务器
 
 由于使用了 ES6 模块 (`import`)，需要通过 HTTP 服务器运行，不能直接打开 HTML 文件。
 
@@ -41,7 +48,7 @@ npm install -g http-server
 http-server -p 8000
 ```
 
-### 2. 访问应用
+#### 2. 访问应用
 
 在浏览器中打开：
 ```
