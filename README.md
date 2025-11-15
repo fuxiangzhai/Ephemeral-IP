@@ -10,11 +10,6 @@ An interactive body network visualization project implemented using MediaPipe Ta
 - **Real-time Interaction**: Body nodes collide and connect with floating particles
 - **Artistic Title**: "Ephemeral-IP" text subtly displayed in the center of screen
 
-## 📚 Official Documentation References
-
-- [MediaPipe Pose Landmarker Web JS Guide](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/web_js?hl=zh-cn#video)
-- [MediaPipe Web Setup Guide](https://ai.google.dev/edge/mediapipe/solutions/setup_web?hl=zh-cn)
-
 ## 🚀 Quick Start
 
 ### 🌐 Online Experience
@@ -162,11 +157,6 @@ A:
 - Person clearly visible in frame
 - Try adjusting camera angle and distance
 
-## 📖 Learning Resources
-
-- [MediaPipe Official Documentation](https://ai.google.dev/edge/mediapipe)
-- [MediaPipe GitHub](https://github.com/google/mediapipe)
-- [Web API Documentation](https://developer.mozilla.org/en-US/docs/Web/API)
 
 ## 📄 License
 
