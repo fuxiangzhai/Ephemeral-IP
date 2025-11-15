@@ -36,12 +36,13 @@ let poseLandmarker = undefined;
 let runningMode = "VIDEO";
 let webcamRunning = false;
 
-// 漂浮点系统
+// 漂浮点系统 - 使用20+种颜色
 const particleColors = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
     '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
     '#F8B739', '#E74C3C', '#3498DB', '#2ECC71', '#F39C12',
-    '#9B59B6', '#1ABC9C', '#E67E22', '#34495E', '#E91E63'
+    '#9B59B6', '#1ABC9C', '#E67E22', '#34495E', '#E91E63',
+    '#FF4444', '#44FF44', '#4444FF', '#FFFF44', '#FF44FF', '#44FFFF'
 ];
 
 class Particle {
@@ -57,6 +58,12 @@ class Particle {
         this.decayRate = 0.001 + Math.random() * 0.002;
         this.connected = false;
         this.connectionTime = 0;
+        this.connectedBodyIndex = -1; // 连接到的身体节点索引
+        this.absorbed = false; // 是否已被吸收
+        this.absorbing = false; // 是否正在被吸收
+        this.absorbProgress = 0; // 吸收进度 (0-1)
+        this.targetBodyX = 0; // 目标身体节点X坐标
+        this.targetBodyY = 0; // 目标身体节点Y坐标
     }
 
     update() {
@@ -72,6 +79,69 @@ class Particle {
         if (this.y < 0 || this.y > particleCanvas.height) {
             this.vy *= -1;
             this.y = Math.max(0, Math.min(particleCanvas.height, this.y));
+        }
+
+        // 如果正在被吸收，执行吸收动画
+        if (this.absorbing) {
+            this.absorbProgress += 0.008; // 吸收进度增加 - 更慢的速度（125帧完成）
+
+            if (this.absorbProgress >= 1) {
+                // 吸收完成，重生为新粒子
+                this.x = Math.random() * particleCanvas.width;
+                this.y = Math.random() * particleCanvas.height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.color = particleColors[Math.floor(Math.random() * particleColors.length)];
+                this.size = Math.random() * 6 + 3;
+                this.alpha = Math.random() * 0.6 + 0.4;
+                this.life = 1;
+                this.decayRate = 0.001 + Math.random() * 0.002;
+                this.connected = false;
+                this.connectionTime = 0;
+                this.connectedBodyIndex = -1;
+                this.absorbed = false;
+                this.absorbing = false;
+                this.absorbProgress = 0;
+                this.targetBodyX = 0;
+                this.targetBodyY = 0;
+                return;
+            }
+
+            // 在吸收过程中向身体节点移动
+            const dx = this.targetBodyX - this.x;
+            const dy = this.targetBodyY - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 0.5) {
+                // 向目标移动 - 动态速度，根据距离调整
+                let speed;
+                if (distance > 10) {
+                    speed = 0.15; // 远距离快速接近
+                } else if (distance > 2) {
+                    speed = 0.08 * (1 - this.absorbProgress * 0.3); // 中距离减速
+                } else {
+                    speed = 0.2 * (1 - this.absorbProgress); // 近距离快速融合
+                }
+
+                this.vx = (dx / distance) * speed;
+                this.vy = (dy / distance) * speed;
+            } else {
+                // 非常接近时，直接设置到目标位置
+                this.x = this.targetBodyX;
+                this.y = this.targetBodyY;
+                this.vx = 0;
+                this.vy = 0;
+            }
+
+            // 只在最后时刻快速融入 - 不变小，只变透明
+            if (this.absorbProgress > 0.7) {
+                // 最后30%的进度开始快速淡化
+                const fadeRate = (this.absorbProgress - 0.7) / 0.3 * 0.15;
+                this.alpha *= (1 - fadeRate);
+                this.alpha = Math.max(0.1, this.alpha);
+            }
+
+            return;
         }
 
         // 如果没有连接，逐渐衰减
@@ -96,8 +166,13 @@ class Particle {
     draw(ctx) {
         ctx.save();
         ctx.globalAlpha = this.alpha;
-        
-        if (this.connected) {
+
+        if (this.absorbing) {
+            // 吸收中的粒子有融合发光效果
+            const fusionIntensity = 1 + Math.sin(this.absorbProgress * Math.PI * 6) * 0.3; // 快速脉冲
+            ctx.shadowColor = this.color;
+            ctx.shadowBlur = 15 * fusionIntensity;
+        } else if (this.connected) {
             // 连接的粒子发光
             ctx.shadowColor = this.color;
             ctx.shadowBlur = 15;
@@ -107,7 +182,7 @@ class Particle {
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
         ctx.fill();
-        
+
         ctx.restore();
     }
 }
@@ -140,6 +215,42 @@ initParticles();
 let currentLandmarks = [];
 let currentWorldLandmarks = [];
 
+// 身体节点大小跟踪（吸收粒子后会变大）
+let bodyNodeSizes = {};
+const BASE_BODY_NODE_SIZE = 12; // 基础大小
+const MAX_BODY_NODE_SIZE = 30; // 最大大小
+
+// 位置平滑缓存，用于减少抖动
+let smoothedLandmarks = {};
+const SMOOTHING_FACTOR = 0.95; // 平滑因子 (0-1, 越大越平滑)
+
+// 应用位置平滑以减少抖动
+function applySmoothing(currentLandmarks) {
+    const smoothed = [];
+
+    currentLandmarks.forEach((landmark, index) => {
+        if (!smoothedLandmarks[index]) {
+            // 第一次检测到这个关键点，直接使用当前位置
+            smoothedLandmarks[index] = {
+                x: landmark.x,
+                y: landmark.y,
+                visibility: landmark.visibility || 1
+            };
+        } else {
+            // 应用指数移动平均平滑
+            const prev = smoothedLandmarks[index];
+            smoothedLandmarks[index] = {
+                x: prev.x * SMOOTHING_FACTOR + landmark.x * (1 - SMOOTHING_FACTOR),
+                y: prev.y * SMOOTHING_FACTOR + landmark.y * (1 - SMOOTHING_FACTOR),
+                visibility: landmark.visibility || 1
+            };
+        }
+        smoothed[index] = smoothedLandmarks[index];
+    });
+
+    return smoothed;
+}
+
 // 初始化MediaPipe
 const createPoseLandmarker = async () => {
     try {
@@ -160,12 +271,12 @@ const createPoseLandmarker = async () => {
             outputSegmentationMasks: false
         });
         
-        loadingText.textContent = '模型加载完成！点击启动摄像头';
-        console.log('PoseLandmarker 初始化完成！');
+        loadingText.textContent = 'Model loading complete! Click to start camera.';
+        console.log('PoseLandmarker Initialization completed!');
         
     } catch (error) {
-        console.error('初始化 PoseLandmarker 失败:', error);
-        loadingText.textContent = '加载失败: ' + error.message;
+        console.error('PoseLandmarker initialization failed:', error);
+        loadingText.textContent = 'Loading failed:' + error.message;
     }
 };
 
@@ -178,18 +289,18 @@ if (hasGetUserMedia()) {
     webcamButton.addEventListener("click", enableCam);
 } else {
     webcamButton.disabled = true;
-    webcamButton.textContent = "浏览器不支持摄像头";
+    webcamButton.textContent = "The browser does not support the camera";
 }
 
 function enableCam() {
     if (!poseLandmarker) {
-        alert("模型还在加载中，请稍候...");
+        alert("The model is still loading, please wait...");
         return;
     }
 
     if (webcamRunning) {
         webcamRunning = false;
-        webcamButton.textContent = "启动摄像头";
+        webcamButton.textContent = "Start Camera";
         
         // 取消动画帧
         if (animationFrameId) {
@@ -223,7 +334,7 @@ function enableCam() {
         }
     } else {
         webcamRunning = true;
-        webcamButton.textContent = "停止摄像头";
+        webcamButton.textContent = "Stop Camera";
         loadingText.textContent = '';
 
         const constraints = {
@@ -235,7 +346,7 @@ function enableCam() {
 
         navigator.mediaDevices.getUserMedia(constraints)
             .then((stream) => {
-                console.log("摄像头权限获取成功");
+                console.log("Camera permissions obtained successfully");
                 video.srcObject = stream;
 
                 // 直接开始检测，不依赖事件监听器
@@ -274,56 +385,133 @@ function enableCam() {
     }
 }
 
+
+// 存储身体节点与粒子之间的连线
+let bodyParticleConnections = [];
+
 // 检测身体节点与漂浮点的互动
 function checkParticleInteractions(landmarks) {
     if (!landmarks || landmarks.length === 0) return;
+
+    // 重置连线数组
+    bodyParticleConnections = [];
 
     // 减少调试信息的频率
     if (Math.random() < 0.05) { // 5%的几率输出调试信息
         console.log('检查粒子互动，关键点数量:', landmarks.length);
     }
 
-    landmarks.forEach(landmark => {
+    // 重置身体节点大小（每次检测都重新计算）
+    bodyNodeSizes = {};
+
+    // 使用平滑后的位置进行粒子互动计算
+    const smoothed = applySmoothing(landmarks);
+
+    smoothed.forEach((landmark, index) => {
         // 将归一化坐标转换为画布坐标
         const x = landmark.x * mainCanvas.width;
         const y = landmark.y * mainCanvas.height;
+
+        // 初始化身体节点大小
+        if (!bodyNodeSizes[index]) {
+            bodyNodeSizes[index] = BASE_BODY_NODE_SIZE;
+        }
+
+        // 获取身体节点的颜色
+        let bodyNodeColor = '#FFFFFF'; // 默认白色
+        for (const group of Object.values(POSE_GROUPS)) {
+            if (group.indices.includes(index)) {
+                bodyNodeColor = POSE_COLORS[group.colorIndex];
+                break;
+            }
+        }
 
         particles.forEach(particle => {
             const dx = x - particle.x;
             const dy = y - particle.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const connectDistance = 60; // 连接距离
+            const connectDistance = 90; // 连接距离
+            const repulsionDistance = 80; // 排斥距离
+            const disconnectDistance = 1000; // 断开连接的最大距离
 
-            if (distance < connectDistance) {
-                if (!particle.connected) {
-                    particle.connected = true;
-                    particle.connectionTime = 0;
-                    if (Math.random() < 0.02) { // 2%的几率输出连接信息
-                        console.log('粒子连接到身体节点，距离:', distance.toFixed(1));
+            if (particle.color === bodyNodeColor) {
+                // 颜色匹配：吸引和连接逻辑
+                if (distance < connectDistance) {
+                    if (!particle.connected) {
+                        particle.connected = true;
+                        particle.connectionTime = 0;
+                        particle.connectedBodyIndex = index;
+                        if (Math.random() < 0.02) { // 2%的几率输出连接信息
+                            console.log('粒子连接到身体节点，距离:', distance.toFixed(1), '颜色匹配');
+                        }
                     }
-                    // 吸引粒子向身体节点
-                    const force = 0.05;
-                    particle.vx += (dx / distance) * force;
-                    particle.vy += (dy / distance) * force;
-                } else {
-                    // 已连接的粒子继续被吸引
-                    const force = 0.02;
-                    particle.vx += (dx / distance) * force;
-                    particle.vy += (dy / distance) * force;
+
+                    if (particle.connected && particle.connectedBodyIndex === index) {
+                        // 吸引粒子向身体节点
+                        const force = 0.03;
+                        particle.vx += (dx / distance) * force;
+                        particle.vy += (dy / distance) * force;
+
+                        // 添加科技风连线
+                        bodyParticleConnections.push({
+                            bodyX: x,
+                            bodyY: y,
+                            particleX: particle.x,
+                            particleY: particle.y,
+                            color: particle.color,
+                            alpha: Math.max(0.3, 1 - distance / connectDistance),
+                            connectionTime: particle.connectionTime
+                        });
+
+                        // 检查是否需要吸收（连接超过3秒，约180帧）
+                        if (particle.connectionTime > 180 && !particle.absorbing && !particle.absorbed) {
+                            particle.absorbing = true;
+                            particle.targetBodyX = x; // 设置目标身体节点位置
+                            particle.targetBodyY = y;
+                            // 身体节点变大
+                            bodyNodeSizes[index] = Math.min(MAX_BODY_NODE_SIZE, bodyNodeSizes[index] + 1.5);
+                            if (Math.random() < 0.05) { // 5%的几率输出吸收信息
+                                console.log('粒子开始被身体节点吸收，身体节点大小增加到:', bodyNodeSizes[index]);
+                            }
+                        }
+                    }
+                } else if (distance > disconnectDistance) {
+                    // 距离太远，断开连接
+                    if (particle.connected && particle.connectedBodyIndex === index) {
+                        particle.connected = false;
+                        particle.connectionTime = 0;
+                        particle.connectedBodyIndex = -1;
+                        if (Math.random() < 0.01) { // 1%的几率输出断开信息
+                            console.log('粒子断开连接，距离:', distance.toFixed(1));
+                        }
+                    }
                 }
             } else {
-                // 距离太远，断开连接
-                if (particle.connected && particle.connectionTime > 30) {
+                // 颜色不匹配：排斥逻辑
+                if (distance < repulsionDistance) {
+                    // 产生排斥力
+                    const force = 0.02 * (1 - distance / repulsionDistance);
+                    particle.vx -= (dx / distance) * force;
+                    particle.vy -= (dy / distance) * force;
+
+                    // 如果太近，增加额外冲击力
+                    if (distance < 30) {
+                        const impactForce = 0.1;
+                        particle.vx -= (dx / distance) * impactForce;
+                        particle.vy -= (dy / distance) * impactForce;
+                    }
+                }
+
+                // 断开任何可能的连接（如果颜色改变了）
+                if (particle.connected && particle.connectedBodyIndex === index) {
                     particle.connected = false;
                     particle.connectionTime = 0;
-                    if (Math.random() < 0.01) { // 1%的几率输出断开信息
-                        console.log('粒子断开连接');
-                    }
+                    particle.connectedBodyIndex = -1;
                 }
             }
 
             // 限制速度
-            const maxSpeed = 1.5;
+            const maxSpeed = 2.0;
             const speed = Math.sqrt(particle.vx * particle.vx + particle.vy * particle.vy);
             if (speed > maxSpeed) {
                 particle.vx = (particle.vx / speed) * maxSpeed;
@@ -345,26 +533,26 @@ const POSE_COLORS = [
 
 // 关键点分组定义 (只保留指定的关键点)
 const POSE_GROUPS = {
-    head: { indices: [0, 7, 8], colorIndex: 0, name: '头部' },
-    rightArm: { indices: [12, 14, 16, 18, 20], colorIndex: 1, name: '右胳膊' },
-    leftArm: { indices: [11, 13, 15, 17, 19], colorIndex: 2, name: '左胳膊' },
+    head: { indices: [0], colorIndex: 0, name: '头部' },
+    rightArm: { indices: [12, 14, 16, 18], colorIndex: 1, name: '右胳膊' },
+    leftArm: { indices: [11, 13, 15, 17], colorIndex: 2, name: '左胳膊' },
     waist: { indices: [23, 24], colorIndex: 3, name: '腰部' },
-    leftLeg: { indices: [26, 28, 30, 32], colorIndex: 4, name: '左腿' },
-    rightLeg: { indices: [23, 25, 27, 29, 31], colorIndex: 5, name: '右腿' }
+    rightLeg: { indices: [25, 27, 31], colorIndex: 4, name: '右腿' },
+    leftLeg: { indices: [26, 28, 32], colorIndex: 5, name: '左腿' }
 };
 
 // 自定义连接线 (只保留指定关键点之间的连接)
 const CUSTOM_CONNECTIONS = [
     // 右胳膊连接
-    [12, 14], [14, 16], [16, 18], [16, 20],
+    [12, 14], [14, 16], [16, 18],
     // 左胳膊连接
-    [11, 13], [13, 15], [15, 17], [15, 19],
+    [11, 13], [13, 15], [15, 17],
     // 腰部连接
     [23, 24],
-    // 左腿连接 (从腰部开始)
-    [23, 26], [26, 28], [28, 30], [30, 32],
     // 右腿连接 (从腰部开始)
-    [24, 25], [25, 27], [27, 29], [29, 31]
+    [24, 25], [25, 27], [27, 31],
+    // 左腿连接 (从腰部开始)
+    [23, 26], [26, 28], [28, 32]
 ];
 
 // 绘制身体特征点（透明背景，只显示指定的关键点）
@@ -377,6 +565,9 @@ function drawLandmarks(landmarks) {
         return;
     }
 
+    // 应用位置平滑以减少抖动
+    const smoothedLandmarks = applySmoothing(landmarks);
+
     // 绘制连接线 - 只绘制指定的连接，更粗更艺术
     mainCtx.lineWidth = 5; // 更粗的连线
     mainCtx.lineCap = 'round'; // 圆形线帽
@@ -386,15 +577,15 @@ function drawLandmarks(landmarks) {
     mainCtx.shadowBlur = 10;
 
     CUSTOM_CONNECTIONS.forEach(([start, end]) => {
-        if (landmarks[start] && landmarks[end]) {
-            const startVisibility = landmarks[start].visibility || 1;
-            const endVisibility = landmarks[end].visibility || 1;
+        if (smoothedLandmarks[start] && smoothedLandmarks[end]) {
+            const startVisibility = smoothedLandmarks[start].visibility || 1;
+            const endVisibility = smoothedLandmarks[end].visibility || 1;
 
             if (startVisibility > 0.5 && endVisibility > 0.5) {
-                const startX = landmarks[start].x * mainCanvas.width;
-                const startY = landmarks[start].y * mainCanvas.height;
-                const endX = landmarks[end].x * mainCanvas.width;
-                const endY = landmarks[end].y * mainCanvas.height;
+                const startX = smoothedLandmarks[start].x * mainCanvas.width;
+                const startY = smoothedLandmarks[start].y * mainCanvas.height;
+                const endX = smoothedLandmarks[end].x * mainCanvas.width;
+                const endY = smoothedLandmarks[end].y * mainCanvas.height;
 
                 // 根据连接的起点确定颜色
                 let color = '#FFFFFF'; // 默认白色
@@ -424,16 +615,16 @@ function drawLandmarks(landmarks) {
         const color = POSE_COLORS[group.colorIndex];
 
         group.indices.forEach(index => {
-            if (landmarks[index]) {
-                const landmark = landmarks[index];
+            if (smoothedLandmarks[index]) {
+                const landmark = smoothedLandmarks[index];
                 const visibility = landmark.visibility || 1;
 
                 if (visibility > 0.5) {
                     const x = landmark.x * mainCanvas.width;
                     const y = landmark.y * mainCanvas.height;
 
-                    // 更大的节点
-                    const size = 12;
+                    // 使用动态大小（基于吸收的粒子数量）
+                    const size = bodyNodeSizes[index] || BASE_BODY_NODE_SIZE;
 
                     mainCtx.save();
                     mainCtx.globalAlpha = visibility;
@@ -467,6 +658,47 @@ function drawLandmarks(landmarks) {
     }
 }
 
+// 绘制身体节点与粒子的科技风连线
+function drawBodyParticleConnections() {
+    particleCtx.save();
+
+    bodyParticleConnections.forEach(connection => {
+        const { bodyX, bodyY, particleX, particleY, color, alpha, connectionTime } = connection;
+
+        // 科技风连线效果
+        particleCtx.strokeStyle = color;
+        particleCtx.globalAlpha = alpha;
+        particleCtx.lineWidth = 2;
+
+        // 添加发光效果
+        particleCtx.shadowColor = color;
+        particleCtx.shadowBlur = 10;
+
+        // 绘制主连线
+        particleCtx.beginPath();
+        particleCtx.moveTo(bodyX, bodyY);
+        particleCtx.lineTo(particleX, particleY);
+        particleCtx.stroke();
+
+        // 根据连接时间添加额外的视觉效果
+        if (connectionTime > 120) { // 连接超过2秒
+            // 添加脉冲效果
+            const pulseAlpha = (Math.sin(connectionTime * 0.1) + 1) * 0.5 * alpha;
+            particleCtx.globalAlpha = pulseAlpha;
+            particleCtx.lineWidth = 3;
+            particleCtx.beginPath();
+            particleCtx.moveTo(bodyX, bodyY);
+            particleCtx.lineTo(particleX, particleY);
+            particleCtx.stroke();
+        }
+
+        // 重置发光效果
+        particleCtx.shadowBlur = 0;
+    });
+
+    particleCtx.restore();
+}
+
 // 绘制漂浮点
 function drawParticles() {
     // 确保画布大小正确
@@ -483,7 +715,10 @@ function drawParticles() {
         return;
     }
 
-    // 更新和绘制所有粒子
+    // 先绘制连线
+    drawBodyParticleConnections();
+
+    // 更新和绘制所有粒子（移除粒子间的互动逻辑）
     particles.forEach(particle => {
         particle.update();
         particle.draw(particleCtx);
@@ -497,7 +732,7 @@ function drawParticles() {
     // 调试信息（减少频率）
     if (Math.random() < 0.01) { // 1%的几率输出调试信息
         const connectedCount = particles.filter(p => p.connected).length;
-        console.log(`粒子状态: 总数${particles.length}, 已连接${connectedCount}`);
+        console.log(`粒子状态: 总数${particles.length}, 已连接${connectedCount}, 连线数量${bodyParticleConnections.length}`);
     }
 }
 
