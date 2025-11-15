@@ -1,252 +1,252 @@
-# Ephemeral-IP - 抽象身体网络互动艺术
+# Ephemeral-IP - Abstract Body Network Interactive Art
 
-基于 MediaPipe Tasks Vision API 实现的交互式身体网络可视化项目。将身体特征点与漂浮粒子系统结合，创造独特的互动体验。
+An interactive body network visualization project implemented using MediaPipe Tasks Vision API. Combines body keypoints with floating particle systems to create unique interactive experiences.
 
-## 🎨 项目特色
+## 🎨 Project Features
 
-- **全屏沉浸式体验**：纯黑色背景，营造神秘氛围
-- **抽象身体可视化**：只显示身体关键点和连接线，背景为黑色
-- **动态漂浮粒子系统**：20种颜色的粒子在屏幕中漂浮
-- **实时互动**：身体节点与漂浮粒子产生碰撞和连接效果
-- **艺术化标题**：屏幕中央隐约显示 "Ephemeral-IP" 文字
+- **Full-screen Immersive Experience**: Pure black background creating a mysterious atmosphere
+- **Abstract Body Visualization**: Only displays body keypoints and connection lines, with black background
+- **Dynamic Floating Particle System**: 20 different colored particles floating on screen
+- **Real-time Interaction**: Body nodes collide and connect with floating particles
+- **Artistic Title**: "Ephemeral-IP" text subtly displayed in the center of screen
 
-## 📚 官方文档参考
+## 📚 Official Documentation References
 
-- [MediaPipe Pose Landmarker Web JS 指南](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/web_js?hl=zh-cn#video)
-- [MediaPipe Web 设置指南](https://ai.google.dev/edge/mediapipe/solutions/setup_web?hl=zh-cn)
+- [MediaPipe Pose Landmarker Web JS Guide](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/web_js?hl=zh-cn#video)
+- [MediaPipe Web Setup Guide](https://ai.google.dev/edge/mediapipe/solutions/setup_web?hl=zh-cn)
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 🌐 在线体验
+### 🌐 Online Experience
 
-体验最新的交互式身体可视化：
+Experience the latest interactive body visualization:
 **[https://fuxiangzhai.github.io/Ephemeral-IP/](https://fuxiangzhai.github.io/Ephemeral-IP/)**
 
-### 💻 本地开发
+### 💻 Local Development
 
-#### 1. 启动本地服务器
+#### 1. Start Local Server
 
-由于使用了 ES6 模块 (`import`)，需要通过 HTTP 服务器运行，不能直接打开 HTML 文件。
+Since ES6 modules (`import`) are used, it must be run through an HTTP server and cannot be opened directly as an HTML file.
 
-**使用 Python 启动服务器：**
+**Using Python to start server:**
 
 ```bash
 # Python 3
 python3 -m http.server 8000
 
-# 或 Python 2
+# or Python 2
 python -m SimpleHTTPServer 8000
 ```
 
-**使用 Node.js 启动服务器：**
+**Using Node.js to start server:**
 
 ```bash
-# 安装 http-server
+# Install http-server
 npm install -g http-server
 
-# 启动服务器
+# Start server
 http-server -p 8000
 ```
 
-#### 2. 访问应用
+#### 2. Access Application
 
-在浏览器中打开：
+Open in browser:
 ```
 http://localhost:8000
 ```
 
-## 📋 功能说明
+## 📋 Feature Description
 
-### 游戏界面
-- **全屏黑色背景**：营造沉浸式体验
-- **背景文字**：屏幕中央隐约显示 "Ephemeral-IP"，带有呼吸动画效果
-- **漂浮粒子**：80个彩色粒子在屏幕中自由漂浮，使用20种不同颜色
+### Game Interface
+- **Full-screen Black Background**: Creates an immersive experience
+- **Background Text**: "Ephemeral-IP" subtly displayed in screen center with breathing animation effect
+- **Floating Particles**: 80 colorful particles freely floating on screen using 20 different colors
 
-### 身体检测与互动
-- **抽象可视化**：只显示身体关键点和连接线，背景保持黑色
-- **实时检测**：使用摄像头实时检测身体姿势
-- **粒子互动**：
-  - 当身体关键点靠近漂浮粒子时，粒子会被吸引
-  - 连接的粒子会发光并跟随身体节点移动
-  - 距离过远时连接会断开，粒子恢复自由漂浮
-  - 未连接的粒子会逐渐衰减并重生
+### Body Detection & Interaction
+- **Abstract Visualization**: Only displays body keypoints and connection lines, background remains black
+- **Real-time Detection**: Uses camera for real-time body pose detection
+- **Particle Interaction**:
+  - When body keypoints approach floating particles, particles are attracted
+  - Connected particles glow and follow body nodes
+  - When distance becomes too great, connections break and particles resume free floating
+  - Unconnected particles gradually decay and regenerate
 
-### 操作方式
-1. 点击"启动摄像头"按钮
-2. 允许浏览器访问摄像头权限
-3. 站在摄像头前，移动身体与漂浮粒子互动
-4. 观察身体节点与粒子的连接效果
+### Operation Instructions
+1. Click "Enable Camera" button
+2. Allow browser to access camera permissions
+3. Stand in front of camera, move body to interact with floating particles
+4. Observe connection effects between body nodes and particles
 
-## 🔧 技术实现
+## 🔧 Technical Implementation
 
-### 使用的库
+### Libraries Used
 
 1. **MediaPipe Tasks Vision** (v0.10.0)
-   - 从 CDN 加载：`https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0`
-   - 提供 `PoseLandmarker`、`FilesetResolver` 等类
+   - Loaded from CDN: `https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0`
+   - Provides `PoseLandmarker`, `FilesetResolver` and other classes
 
-### 核心功能实现
+### Core Feature Implementation
 
-#### 1. 双画布系统
-- **主画布 (mainCanvas)**：显示身体特征点和连接线
-- **粒子画布 (particleCanvas)**：显示漂浮粒子系统
-- 两个画布叠加，实现分层渲染
+#### 1. Dual Canvas System
+- **Main Canvas (mainCanvas)**: Displays body keypoints and connection lines
+- **Particle Canvas (particleCanvas)**: Displays floating particle system
+- Two canvases overlay for layered rendering
 
-#### 2. 漂浮粒子系统
+#### 2. Floating Particle System
 ```javascript
 class Particle {
-    // 20种颜色的粒子
-    // 自动移动、边界反弹
-    // 生命周期管理（衰减和重生）
-    // 与身体节点的互动检测
+    // 20 different colored particles
+    // Automatic movement and boundary bouncing
+    // Lifecycle management (decay and regeneration)
+    // Interaction detection with body nodes
 }
 ```
 
-#### 3. 身体节点与粒子互动
-- **距离检测**：计算身体关键点与粒子的距离
-- **连接机制**：距离小于60像素时建立连接
-- **物理效果**：连接的粒子被吸引向身体节点
-- **视觉效果**：连接的粒子发光并增大
+#### 3. Body Node & Particle Interaction
+- **Distance Detection**: Calculate distance between body keypoints and particles
+- **Connection Mechanism**: Establish connection when distance is less than 60 pixels
+- **Physics Effects**: Connected particles are attracted to body nodes
+- **Visual Effects**: Connected particles glow and increase in size
 
-#### 4. 抽象可视化
-- 只绘制身体关键点和连接线
-- 背景保持纯黑色
-- 关键点使用绿色发光效果
-- 重要节点（头部、肩膀、臀部）更大更亮
+#### 4. Abstract Visualization
+- Only renders body keypoints and connection lines
+- Background remains pure black
+- Keypoints use green glow effect
+- Important nodes (head, shoulders, hips) are larger and brighter
 
-## 📝 重要说明
+## 📝 Important Notes
 
-### 1. 模块类型
-- 代码使用 ES6 模块 (`import/export`)
-- HTML 中必须使用 `<script type="module">` 标签
-- 必须通过 HTTP 服务器运行，不能使用 `file://` 协议
+### 1. Module Type
+- Code uses ES6 modules (`import/export`)
+- HTML must use `<script type="module">` tags
+- Must be run through HTTP server, cannot use `file://` protocol
 
-### 2. 模型加载
-- 模型文件从 Google Cloud Storage 加载
-- 首次加载可能需要一些时间
-- 需要稳定的网络连接
+### 2. Model Loading
+- Model files loaded from Google Cloud Storage
+- Initial loading may take some time
+- Requires stable network connection
 
-### 3. 浏览器兼容性
-- 需要支持 ES6 模块的现代浏览器
-- 推荐使用 Chrome、Firefox、Edge 最新版本
-- 摄像头功能需要 HTTPS 环境（本地 localhost 除外）
+### 3. Browser Compatibility
+- Requires modern browsers that support ES6 modules
+- Recommended: Latest versions of Chrome, Firefox, Edge
+- Camera functionality requires HTTPS environment (except localhost)
 
-### 4. 性能优化
-- 使用 GPU 加速（`delegate: "GPU"`）
-- 视频模式使用 `detectForVideo` 而非 `detect`
-- 通过 `requestAnimationFrame` 优化渲染循环
+### 4. Performance Optimization
+- Uses GPU acceleration (`delegate: "GPU"`)
+- Video mode uses `detectForVideo` instead of `detect`
+- Rendering loop optimized with `requestAnimationFrame`
 
-## 🐛 常见问题
+## 🐛 Frequently Asked Questions
 
-### Q: 页面显示空白？
-A: 检查浏览器控制台是否有错误。确保：
-- 使用 HTTP 服务器运行（不是直接打开文件）
-- 网络连接正常（需要加载 CDN 资源）
-- 浏览器支持 ES6 模块
+### Q: Page shows blank?
+A: Check browser console for errors. Ensure:
+- Running through HTTP server (not opening file directly)
+- Network connection is normal (CDN resources need to be loaded)
+- Browser supports ES6 modules
 
-### Q: 摄像头无法访问？
-A: 
-- 确保允许浏览器访问摄像头权限
-- 检查是否有其他应用占用摄像头
-- 本地开发时 localhost 可以使用 HTTP，生产环境需要 HTTPS
-
-### Q: 模型加载失败？
+### Q: Cannot access camera?
 A:
-- 检查网络连接
-- 确认 CDN 地址可访问
-- 查看浏览器控制台的错误信息
+- Ensure browser is allowed to access camera permissions
+- Check if other applications are using the camera
+- Local development can use HTTP on localhost, production environment requires HTTPS
 
-### Q: 检测结果不准确？
+### Q: Model loading failed?
 A:
-- 确保光线充足
-- 人物在画面中清晰可见
-- 尝试调整摄像头角度和距离
+- Check network connection
+- Confirm CDN address is accessible
+- View error messages in browser console
 
-## 📖 学习资源
+### Q: Detection results inaccurate?
+A:
+- Ensure adequate lighting
+- Person clearly visible in frame
+- Try adjusting camera angle and distance
 
-- [MediaPipe 官方文档](https://ai.google.dev/edge/mediapipe)
+## 📖 Learning Resources
+
+- [MediaPipe Official Documentation](https://ai.google.dev/edge/mediapipe)
 - [MediaPipe GitHub](https://github.com/google/mediapipe)
-- [Web API 文档](https://developer.mozilla.org/zh-CN/docs/Web/API)
+- [Web API Documentation](https://developer.mozilla.org/en-US/docs/Web/API)
 
-## 📄 许可证
+## 📄 License
 
-本项目基于 Apache License 2.0 许可证，与 MediaPipe 官方示例保持一致。
+This project is based on Apache License 2.0, consistent with MediaPipe official examples.
 
-## 🔧 故障排除
+## 🔧 Troubleshooting
 
-如果页面显示空白、摄像头启动后黑屏或出现检测错误，请按以下步骤排查：
+If the page shows blank, black screen after camera starts, or detection errors occur, follow these troubleshooting steps:
 
-### 1. 基本功能测试
-- **测试粒子**: 点击"测试粒子"按钮，确认粒子系统正常（屏幕应该显示彩色圆点）
-- **测试检测**: 点击"测试检测"按钮，确认MediaPipe检测功能正常
+### 1. Basic Function Tests
+- **Test Particles**: Click "Test Particles" button to confirm particle system is working (should show colored dots on screen)
+- **Test Detection**: Click "Test Detection" button to confirm MediaPipe detection function is working
 
-### 2. 常见错误及解决方案
+### 2. Common Errors & Solutions
 
-#### 检测错误 (Detection Error)
+#### Detection Error
 ```
-检测错误: WebGL context lost
+Detection Error: WebGL context lost
 ```
-**原因**: WebGL上下文丢失，通常是内存不足
-**解决**: 关闭其他浏览器标签页，释放内存
+**Cause**: WebGL context lost, usually due to insufficient memory
+**Solution**: Close other browser tabs to free up memory
 
-#### 视频未准备好
+#### Video Not Ready
 ```
-视频未准备好，跳过检测
+Video not ready, skipping detection
 ```
-**原因**: 摄像头权限问题或视频流未就绪
-**解决**:
-- 确保允许浏览器访问摄像头
-- 检查摄像头是否被其他应用占用
-- 刷新页面重试
+**Cause**: Camera permission issues or video stream not ready
+**Solution**:
+- Ensure browser is allowed camera access
+- Check if camera is being used by other applications
+- Refresh page and retry
 
-#### PoseLandmarker未初始化
+#### PoseLandmarker Not Initialized
 ```
-PoseLandmarker未初始化，跳过检测
+PoseLandmarker not initialized, skipping detection
 ```
-**原因**: MediaPipe库加载失败
-**解决**:
-- 检查网络连接
-- 刷新页面重新加载库
-- 检查浏览器控制台是否有CDN加载错误
+**Cause**: MediaPipe library loading failed
+**Solution**:
+- Check network connection
+- Refresh page to reload libraries
+- Check browser console for CDN loading errors
 
-#### 连续错误自动停止
+#### Continuous Errors Auto-stop
 ```
-检测错误次数过多(5)，停止摄像头检测
+Too many detection errors (5), stopping camera detection
 ```
-**原因**: 连续检测失败5次，应用自动停止保护
-**解决**:
-- 检查上述常见错误原因
-- 刷新页面重新开始
-- 查看控制台详细错误信息
+**Cause**: 5 consecutive detection failures, app auto-stops for protection
+**Solution**:
+- Check causes of common errors above
+- Refresh page to restart
+- View detailed error information in console
 
-### 3. 浏览器设置
+### 3. Browser Settings
 
-#### 启用硬件加速
-- **Chrome**: 设置 → 高级 → 系统 → ✅ 使用硬件加速模式
-- **Firefox**: about:config → `webgl.force-enabled` → 设置为 true
-- **Edge**: 设置 → 系统 → ✅ 使用硬件加速
+#### Enable Hardware Acceleration
+- **Chrome**: Settings → Advanced → System → ✅ Use hardware acceleration
+- **Firefox**: about:config → `webgl.force-enabled` → Set to true
+- **Edge**: Settings → System → ✅ Use hardware acceleration
 
-#### 摄像头权限
-- **Chrome**: 点击地址栏🔒图标 → 摄像头 → 允许
-- **Firefox**: 点击🛡️图标 → 允许摄像头
-- **Edge**: 权限图标 → 允许摄像头访问
+#### Camera Permissions
+- **Chrome**: Click 🔒 icon in address bar → Camera → Allow
+- **Firefox**: Click 🛡️ icon → Allow camera
+- **Edge**: Permission icon → Allow camera access
 
-### 4. 兼容性检查
-- 访问 `webgl-test.html` 检查WebGL支持
-- 访问 `camera-test.html` 检查摄像头功能
-- 使用现代浏览器（Chrome、Firefox、Edge最新版本）
+### 4. Compatibility Check
+- Visit `webgl-test.html` to check WebGL support
+- Visit `camera-test.html` to check camera functionality
+- Use modern browsers (latest versions of Chrome, Firefox, Edge)
 
-### 5. 调试步骤
-1. 打开浏览器控制台（F12）
-2. 刷新页面，观察加载过程
-3. 点击测试按钮确认各功能状态
-4. 查看控制台错误信息
-5. 根据具体错误进行针对性修复
+### 5. Debug Steps
+1. Open browser console (F12)
+2. Refresh page, observe loading process
+3. Click test buttons to confirm function status
+4. View console error messages
+5. Fix issues based on specific errors
 
-## 🔄 更新日志
+## 🔄 Changelog
 
 - **v1.0.0** (2024)
-  - 基于官方 MediaPipe Tasks Vision API 实现
-  - 支持图片和视频实时检测
-  - 完整的中文界面和错误处理
-  - 粒子系统和身体互动功能
+  - Implemented using official MediaPipe Tasks Vision API
+  - Supports image and video real-time detection
+  - Complete Chinese interface and error handling
+  - Particle system and body interaction features
