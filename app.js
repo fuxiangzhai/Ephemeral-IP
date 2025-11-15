@@ -11,6 +11,12 @@ const video = document.getElementById("webcam");
 const webcamButton = document.getElementById("webcamButton");
 const loadingText = document.getElementById("loading");
 
+// 摄像头预览元素
+const cameraPreview = document.getElementById("cameraPreview");
+const previewVideo = document.getElementById("previewVideo");
+const previewCanvas = document.getElementById("previewCanvas");
+const previewCtx = previewCanvas.getContext("2d");
+
 const mainCtx = mainCanvas.getContext("2d");
 const particleCtx = particleCanvas.getContext("2d");
 
@@ -18,11 +24,23 @@ const particleCtx = particleCanvas.getContext("2d");
 function resizeCanvases() {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    
+
     mainCanvas.width = width;
     mainCanvas.height = height;
     particleCanvas.width = width;
     particleCanvas.height = height;
+
+    // 设置预览画布大小
+    updatePreviewSize();
+}
+
+// 更新预览画布大小
+function updatePreviewSize() {
+    if (cameraPreview.style.display !== 'none') {
+        const previewSize = Math.min(window.innerWidth, window.innerHeight) / 4; // 改为1/4
+        previewCanvas.width = previewSize;
+        previewCanvas.height = previewSize;
+    }
 }
 
 resizeCanvases();
@@ -301,20 +319,30 @@ function enableCam() {
     if (webcamRunning) {
         webcamRunning = false;
         webcamButton.textContent = "Start Camera";
-        
+
         // 取消动画帧
         if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
         }
-        
+
         // 停止视频流
         if (video.srcObject) {
             const tracks = video.srcObject.getTracks();
             tracks.forEach(track => track.stop());
             video.srcObject = null;
         }
-        
+
+        // 停止预览视频流
+        if (previewVideo.srcObject) {
+            const tracks = previewVideo.srcObject.getTracks();
+            tracks.forEach(track => track.stop());
+            previewVideo.srcObject = null;
+        }
+
+        // 隐藏摄像头预览
+        cameraPreview.style.display = 'none';
+
         // 清空主画布（透明背景）
         mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
         currentLandmarks = [];
@@ -347,7 +375,16 @@ function enableCam() {
         navigator.mediaDevices.getUserMedia(constraints)
             .then((stream) => {
                 console.log("Camera permissions obtained successfully");
+
+                // 设置主视频流（用于检测）
                 video.srcObject = stream;
+
+                // 设置预览视频流（用于显示）
+                previewVideo.srcObject = stream.clone();
+
+                // 显示摄像头预览
+                cameraPreview.style.display = 'block';
+                updatePreviewSize();
 
                 // 直接开始检测，不依赖事件监听器
                 video.addEventListener("loadeddata", () => {
@@ -658,6 +695,58 @@ function drawLandmarks(landmarks) {
     }
 }
 
+// 绘制预览画布上的关节点
+function drawPreviewLandmarks(landmarks) {
+    if (!landmarks || landmarks.length === 0 || cameraPreview.style.display === 'none') {
+        return;
+    }
+
+    // 清空预览画布
+    previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+    const videoAspect = video.videoWidth / video.videoHeight;
+    const canvasAspect = previewCanvas.width / previewCanvas.height;
+
+    let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
+
+    // 计算视频在画布上的显示区域（保持比例）
+    if (videoAspect > canvasAspect) {
+        // 视频更宽，以高度为准
+        drawHeight = previewCanvas.height;
+        drawWidth = drawHeight * videoAspect;
+        offsetX = (previewCanvas.width - drawWidth) / 2;
+    } else {
+        // 视频更高，以宽度为准
+        drawWidth = previewCanvas.width;
+        drawHeight = drawWidth / videoAspect;
+        offsetY = (previewCanvas.height - drawHeight) / 2;
+    }
+
+    // 绘制简化的关节点
+    for (const [groupName, group] of Object.entries(POSE_GROUPS)) {
+        const color = POSE_COLORS[group.colorIndex];
+
+        group.indices.forEach(index => {
+            if (landmarks[index]) {
+                const landmark = landmarks[index];
+                const visibility = landmark.visibility || 1;
+
+                if (visibility > 0.5) {
+                    // 将视频坐标转换为预览画布坐标
+                    const x = (landmark.x * drawWidth) + offsetX;
+                    const y = (landmark.y * drawHeight) + offsetY;
+
+                    // 绘制关节点
+                    previewCtx.fillStyle = color;
+                    previewCtx.beginPath();
+                    previewCtx.arc(x, y, 3, 0, Math.PI * 2); // 较小的节点
+                    previewCtx.fill();
+                }
+            }
+        });
+    }
+}
+
 // 绘制身体节点与粒子的科技风连线
 function drawBodyParticleConnections() {
     particleCtx.save();
@@ -802,6 +891,9 @@ async function predictWebcam() {
 
                     // 绘制特征点
                     drawLandmarks(currentLandmarks);
+
+                    // 在预览画布上绘制简化的关节点
+                    drawPreviewLandmarks(currentLandmarks);
                 } else {
                     // 没有检测到身体，清空主画布但保持黑色背景
                     mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
