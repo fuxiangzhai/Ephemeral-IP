@@ -82,6 +82,7 @@ class Particle {
         this.absorbProgress = 0; // 吸收进度 (0-1)
         this.targetBodyX = 0; // 目标身体节点X坐标
         this.targetBodyY = 0; // 目标身体节点Y坐标
+        this.assimilatedGroup = null; // 加入身体后的颜色组
     }
 
     update() {
@@ -105,6 +106,7 @@ class Particle {
 
             if (this.absorbProgress >= 1) {
                 // 吸收完成，重生为新粒子
+                removeParticleFromGroups(this);
                 this.x = Math.random() * particleCanvas.width;
                 this.y = Math.random() * particleCanvas.height;
                 this.vx = (Math.random() - 0.5) * 0.5;
@@ -122,6 +124,7 @@ class Particle {
                 this.absorbProgress = 0;
                 this.targetBodyX = 0;
                 this.targetBodyY = 0;
+                this.assimilatedGroup = null;
                 return;
             }
 
@@ -167,10 +170,12 @@ class Particle {
             this.life -= this.decayRate;
             if (this.life <= 0) {
                 // 重生
+                removeParticleFromGroups(this);
                 this.x = Math.random() * particleCanvas.width;
                 this.y = Math.random() * particleCanvas.height;
                 this.life = 1;
                 this.alpha = Math.random() * 0.5 + 0.3;
+                this.assimilatedGroup = null;
             }
         } else {
             // 连接的粒子保持活力
@@ -183,7 +188,9 @@ class Particle {
 
     draw(ctx) {
         ctx.save();
-        ctx.globalAlpha = this.alpha;
+        const groupAlpha =
+            this.assimilatedGroup !== null ? getGroupFadeAlpha(this.assimilatedGroup) : 1;
+        ctx.globalAlpha = this.alpha * groupAlpha;
 
         if (this.absorbing) {
             // 吸收中的粒子有融合发光效果
@@ -351,7 +358,12 @@ function enableCam() {
         particles.forEach(particle => {
             particle.connected = false;
             particle.connectionTime = 0;
+            particle.assimilatedGroup = null;
+            removeParticleFromGroups(particle);
         });
+
+        // 重置颜色组计时器
+        resetBodyGroupTimers();
 
         // 重置错误计数器
         detectionErrorCount = 0;
@@ -364,6 +376,7 @@ function enableCam() {
         webcamRunning = true;
         webcamButton.textContent = "Stop Camera";
         loadingText.textContent = '';
+        resetBodyGroupTimers();
 
         const constraints = {
             video: {
@@ -462,8 +475,13 @@ function checkParticleInteractions(landmarks) {
                 break;
             }
         }
+        const colorIndex = getColorIndexFromHex(bodyNodeColor);
 
         particles.forEach(particle => {
+            if (particle.assimilatedGroup !== null && particle.assimilatedGroup !== colorIndex) {
+                return;
+            }
+
             const dx = x - particle.x;
             const dy = y - particle.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -484,6 +502,13 @@ function checkParticleInteractions(landmarks) {
                     }
 
                     if (particle.connected && particle.connectedBodyIndex === index) {
+                        if (particle.assimilatedGroup === null) {
+                            particle.assimilatedGroup = colorIndex;
+                        }
+
+                        // 连接即刷新对应组的计时器
+                        refreshBodyGroup(colorIndex, particle);
+
                         // 吸引粒子向身体节点
                         const force = 0.03;
                         particle.vx += (dx / distance) * force;
@@ -497,7 +522,8 @@ function checkParticleInteractions(landmarks) {
                             particleY: particle.y,
                             color: particle.color,
                             alpha: Math.max(0.3, 1 - distance / connectDistance),
-                            connectionTime: particle.connectionTime
+                            connectionTime: particle.connectionTime,
+                            bodyColorIndex: colorIndex
                         });
 
                         // 检查是否需要吸收（连接超过3秒，约180帧）
@@ -578,6 +604,44 @@ const POSE_GROUPS = {
     leftLeg: { indices: [26, 28, 32], colorIndex: 5, name: '左腿' }
 };
 
+// 身体颜色组的褪色与成员追踪
+const GROUP_FADE_DURATION = 5 * 60 * 1000; // 5分钟
+const bodyGroupTimers = POSE_COLORS.map(() => ({
+    lastRefresh: performance.now(),
+    particles: new Set()
+}));
+
+function refreshBodyGroup(colorIndex, particle) {
+    const state = bodyGroupTimers[colorIndex];
+    state.lastRefresh = performance.now();
+    if (particle) {
+        state.particles.add(particle);
+    }
+}
+
+function resetBodyGroupTimers() {
+    const now = performance.now();
+    bodyGroupTimers.forEach(state => {
+        state.lastRefresh = now;
+        state.particles.clear();
+    });
+}
+
+function getGroupFadeAlpha(colorIndex) {
+    const elapsed = performance.now() - bodyGroupTimers[colorIndex].lastRefresh;
+    if (elapsed <= 0) return 1;
+    if (elapsed >= GROUP_FADE_DURATION) return 0;
+    return 1 - (elapsed / GROUP_FADE_DURATION);
+}
+
+function removeParticleFromGroups(particle) {
+    bodyGroupTimers.forEach(state => state.particles.delete(particle));
+}
+
+function getColorIndexFromHex(color) {
+    return POSE_COLORS.indexOf(color);
+}
+
 // 自定义连接线 (只保留指定关键点之间的连接)
 const CUSTOM_CONNECTIONS = [
     // 右胳膊连接
@@ -605,58 +669,166 @@ function drawLandmarks(landmarks) {
     // 应用位置平滑以减少抖动
     const smoothedLandmarks = applySmoothing(landmarks);
 
-    // 绘制连接线 - 只绘制指定的连接，更粗更艺术
-    mainCtx.lineWidth = 5; // 更粗的连线
-    mainCtx.lineCap = 'round'; // 圆形线帽
-    mainCtx.lineJoin = 'round'; // 圆形连接
+    const palette = {
+        head: '#E74C3C',
+        torso: '#F39C12',
+        leftArm: '#2ECC71',
+        rightArm: '#2D6CFF',
+        leftLeg: '#9B59B6',
+        rightLeg: '#16C1C8',
+        scribble: 'rgba(230, 230, 230, 0.9)'
+    };
 
-    // 为连线添加发光效果
-    mainCtx.shadowBlur = 10;
+    const getPoint = (index) => {
+        const landmark = smoothedLandmarks[index];
+        if (!landmark) return null;
+        const visibility = landmark.visibility ?? 1;
+        if (visibility < 0.4) return null;
+        return {
+            x: landmark.x * mainCanvas.width,
+            y: landmark.y * mainCanvas.height,
+            visibility
+        };
+    };
 
-    CUSTOM_CONNECTIONS.forEach(([start, end]) => {
-        if (smoothedLandmarks[start] && smoothedLandmarks[end]) {
-            const startVisibility = smoothedLandmarks[start].visibility || 1;
-            const endVisibility = smoothedLandmarks[end].visibility || 1;
+    const drawPolygon = (points, fillColor, strokeColor, shadowColor) => {
+        const validPoints = points.filter(Boolean);
+        if (validPoints.length < 3) return;
 
-            if (startVisibility > 0.5 && endVisibility > 0.5) {
-                const startX = smoothedLandmarks[start].x * mainCanvas.width;
-                const startY = smoothedLandmarks[start].y * mainCanvas.height;
-                const endX = smoothedLandmarks[end].x * mainCanvas.width;
-                const endY = smoothedLandmarks[end].y * mainCanvas.height;
+        mainCtx.save();
+        mainCtx.lineJoin = 'round';
+        mainCtx.lineCap = 'round';
 
-                // 根据连接的起点确定颜色
-                let color = '#FFFFFF'; // 默认白色
-                for (const group of Object.values(POSE_GROUPS)) {
-                    if (group.indices.includes(start)) {
-                        color = POSE_COLORS[group.colorIndex];
-                        break;
-                    }
-                }
-
-                mainCtx.strokeStyle = color;
-                mainCtx.shadowColor = color;
-                mainCtx.beginPath();
-                mainCtx.moveTo(startX, startY);
-                mainCtx.lineTo(endX, endY);
-                mainCtx.stroke();
-            }
+        if (shadowColor) {
+            mainCtx.shadowColor = shadowColor;
+            mainCtx.shadowBlur = 15;
         }
+
+        mainCtx.beginPath();
+        mainCtx.moveTo(validPoints[0].x, validPoints[0].y);
+        validPoints.slice(1).forEach(p => mainCtx.lineTo(p.x, p.y));
+        mainCtx.closePath();
+        mainCtx.fillStyle = fillColor;
+        mainCtx.fill();
+
+        if (strokeColor) {
+            mainCtx.lineWidth = 6;
+            mainCtx.shadowBlur = 0;
+            mainCtx.strokeStyle = strokeColor;
+            mainCtx.stroke();
+        }
+
+        mainCtx.restore();
+    };
+
+    const lerp = (a, b, t) => ({
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t
     });
 
-    // 清除阴影效果
-    mainCtx.shadowColor = 'transparent';
-    mainCtx.shadowBlur = 0;
+    const leftShoulder = getPoint(11);
+    const rightShoulder = getPoint(12);
+    const leftHip = getPoint(23);
+    const rightHip = getPoint(24);
+    const leftElbow = getPoint(13);
+    const rightElbow = getPoint(14);
+    const leftWrist = getPoint(15);
+    const rightWrist = getPoint(16);
+    const leftKnee = getPoint(25);
+    const rightKnee = getPoint(26);
+    const leftAnkle = getPoint(27);
+    const rightAnkle = getPoint(28);
+    const nose = getPoint(0);
+    const leftEar = getPoint(7) || leftShoulder;
+    const rightEar = getPoint(8) || rightShoulder;
 
-    // 绘制关键点 - 只绘制指定的关键点，节点更大更艺术
+    mainCtx.save();
+    mainCtx.lineJoin = 'round';
+    mainCtx.lineCap = 'round';
+
+    // 身体灰色涂鸦感的骨架
+    if (leftShoulder && rightShoulder && leftHip && rightHip) {
+        const spineTop = lerp(leftShoulder, rightShoulder, 0.5);
+        const spineBottom = lerp(leftHip, rightHip, 0.5);
+        const horizontal = (() => {
+            const dx = rightShoulder.x - leftShoulder.x;
+            const dy = rightShoulder.y - leftShoulder.y;
+            const len = Math.hypot(dx, dy) || 1;
+            return { x: dx / len, y: dy / len };
+        })();
+
+        const segments = 16;
+        const amplitude = Math.max(Math.hypot(rightShoulder.x - leftShoulder.x, rightShoulder.y - leftShoulder.y) * 0.45, 40);
+
+        mainCtx.beginPath();
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const base = lerp(spineTop, spineBottom, t);
+            const taper = 1 - Math.abs(0.5 - t) * 1.5;
+            const wave = (i % 2 === 0 ? 1 : -1) * (0.6 + Math.abs(Math.sin(i * 2.1)) * 0.4);
+            const offset = amplitude * taper * wave * 0.35;
+            const x = base.x + horizontal.x * offset;
+            const y = base.y + horizontal.y * offset;
+            if (i === 0) {
+                mainCtx.moveTo(x, y);
+            } else {
+                mainCtx.lineTo(x, y);
+            }
+        }
+
+        mainCtx.strokeStyle = palette.scribble;
+        mainCtx.lineWidth = 12;
+        mainCtx.shadowColor = 'rgba(200, 200, 200, 0.35)';
+        mainCtx.shadowBlur = 18;
+        mainCtx.stroke();
+    }
+
+    // 躯干部抽象三角形
+    if (leftShoulder && rightShoulder && leftHip && rightHip) {
+        const hipCenter = lerp(leftHip, rightHip, 0.5);
+        drawPolygon([leftShoulder, rightShoulder, hipCenter], palette.torso, '#FFC870', 'rgba(243, 156, 18, 0.6)');
+    }
+
+    // 头部的红色小三角
+    if (nose && leftEar && rightEar) {
+        drawPolygon([nose, leftEar, rightEar], palette.head, '#F9C0B3', 'rgba(231, 76, 60, 0.5)');
+    }
+
+    // 手臂抽象色块
+    drawPolygon([leftShoulder, leftElbow, leftWrist], palette.leftArm, '#8EF1B1', 'rgba(46, 204, 113, 0.5)');
+    drawPolygon([rightShoulder, rightElbow, rightWrist], palette.rightArm, '#9AB8FF', 'rgba(45, 108, 255, 0.4)');
+
+    // 腿部抽象色块
+    drawPolygon([leftHip, leftKnee, leftAnkle], palette.leftLeg, '#D5B0EA', 'rgba(155, 89, 182, 0.5)');
+    drawPolygon([rightHip, rightKnee, rightAnkle], palette.rightLeg, '#8BE8F0', 'rgba(22, 193, 200, 0.45)');
+
+    // 对角线强调三角形，让视觉更有交错感
+    if (leftShoulder && rightHip && leftAnkle) {
+        drawPolygon([leftShoulder, rightHip, leftAnkle], 'rgba(255, 210, 77, 0.55)', '#FFEFA3', 'rgba(255, 210, 77, 0.5)');
+    }
+    if (rightShoulder && leftHip && rightAnkle) {
+        drawPolygon([rightShoulder, leftHip, rightAnkle], 'rgba(52, 152, 219, 0.5)', '#BBDDF5', 'rgba(52, 152, 219, 0.45)');
+    }
+
+    mainCtx.restore();
+
+    // 绘制关键点 - 圆形节点保留互动颜色，呼应抽象图形
     for (const [groupName, group] of Object.entries(POSE_GROUPS)) {
         const color = POSE_COLORS[group.colorIndex];
+        const fadeAlpha = getGroupFadeAlpha(group.colorIndex);
+
+        if (fadeAlpha <= 0) {
+            continue;
+        }
 
         group.indices.forEach(index => {
             if (smoothedLandmarks[index]) {
                 const landmark = smoothedLandmarks[index];
                 const visibility = landmark.visibility || 1;
 
-                if (visibility > 0.5) {
+                const blendedAlpha = visibility * fadeAlpha;
+
+                if (blendedAlpha > 0.5 * fadeAlpha) {
                     const x = landmark.x * mainCanvas.width;
                     const y = landmark.y * mainCanvas.height;
 
@@ -664,11 +836,11 @@ function drawLandmarks(landmarks) {
                     const size = bodyNodeSizes[index] || BASE_BODY_NODE_SIZE;
 
                     mainCtx.save();
-                    mainCtx.globalAlpha = visibility;
+                    mainCtx.globalAlpha = blendedAlpha;
 
                     // 绘制发光外圈
                     mainCtx.shadowColor = color;
-                    mainCtx.shadowBlur = 15;
+                    mainCtx.shadowBlur = 18;
                     mainCtx.fillStyle = color;
                     mainCtx.beginPath();
                     mainCtx.arc(x, y, size, 0, Math.PI * 2);
@@ -677,15 +849,15 @@ function drawLandmarks(landmarks) {
                     // 绘制实心内圈
                     mainCtx.shadowColor = 'transparent';
                     mainCtx.shadowBlur = 0;
-                    mainCtx.fillStyle = color;
+                    mainCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
                     mainCtx.beginPath();
-                    mainCtx.arc(x, y, size * 0.6, 0, Math.PI * 2);
+                    mainCtx.arc(x, y, size * 0.65, 0, Math.PI * 2);
                     mainCtx.fill();
 
                     // 添加白色高光
-                    mainCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    mainCtx.fillStyle = 'rgba(255, 255, 255, 0.92)';
                     mainCtx.beginPath();
-                    mainCtx.arc(x - size * 0.25, y - size * 0.25, size * 0.25, 0, Math.PI * 2);
+                    mainCtx.arc(x - size * 0.25, y - size * 0.25, size * 0.28, 0, Math.PI * 2);
                     mainCtx.fill();
 
                     mainCtx.restore();
@@ -752,11 +924,16 @@ function drawBodyParticleConnections() {
     particleCtx.save();
 
     bodyParticleConnections.forEach(connection => {
-        const { bodyX, bodyY, particleX, particleY, color, alpha, connectionTime } = connection;
+        const { bodyX, bodyY, particleX, particleY, color, alpha, connectionTime, bodyColorIndex } = connection;
+
+        const groupAlpha = bodyColorIndex !== undefined ? getGroupFadeAlpha(bodyColorIndex) : 1;
+        if (groupAlpha <= 0) {
+            return;
+        }
 
         // 科技风连线效果
         particleCtx.strokeStyle = color;
-        particleCtx.globalAlpha = alpha;
+        particleCtx.globalAlpha = alpha * groupAlpha;
         particleCtx.lineWidth = 2;
 
         // 添加发光效果
@@ -772,7 +949,7 @@ function drawBodyParticleConnections() {
         // 根据连接时间添加额外的视觉效果
         if (connectionTime > 120) { // 连接超过2秒
             // 添加脉冲效果
-            const pulseAlpha = (Math.sin(connectionTime * 0.1) + 1) * 0.5 * alpha;
+            const pulseAlpha = (Math.sin(connectionTime * 0.1) + 1) * 0.5 * alpha * groupAlpha;
             particleCtx.globalAlpha = pulseAlpha;
             particleCtx.lineWidth = 3;
             particleCtx.beginPath();
