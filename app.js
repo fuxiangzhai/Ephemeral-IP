@@ -341,32 +341,45 @@ function applySmoothing(currentLandmarks) {
     return smoothed;
 }
 
-// 初始化MediaPipe
+const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+const WASM_ASSETS_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm";
+
+// 初始化MediaPipe，支持 GPU -> CPU 的自动降级，避免模型加载卡住
 const createPoseLandmarker = async () => {
     try {
-        loadingText.textContent = '正在加载 MediaPipe 模型...';
-        
-        const vision = await FilesetResolver.forVisionTasks(
-            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
-        );
-        
-        loadingText.textContent = '正在初始化 PoseLandmarker...';
-        poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-            baseOptions: {
-                modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
-                delegate: "GPU"
-            },
-            runningMode: runningMode,
-            numPoses: 1,
-            outputSegmentationMasks: false
-        });
-        
-        loadingText.textContent = 'Model loading complete! Click to start camera.';
+        loadingText.textContent = 'Loading MediaPipe model...';
+
+        const vision = await FilesetResolver.forVisionTasks(WASM_ASSETS_URL);
+
+        const attemptCreate = async (delegate) => {
+            loadingText.textContent = delegate === 'GPU'
+                ? 'Initializing PoseLandmarker (GPU)...'
+                : 'GPU unavailable, falling back to CPU...';
+
+            return PoseLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: POSE_MODEL_URL,
+                    delegate
+                },
+                runningMode: runningMode,
+                numPoses: 1,
+                outputSegmentationMasks: false
+            });
+        };
+
+        try {
+            poseLandmarker = await attemptCreate('GPU');
+        } catch (gpuError) {
+            console.warn('GPU delegate unavailable, switching to CPU:', gpuError);
+            poseLandmarker = await attemptCreate('CPU');
+        }
+
+        loadingText.textContent = 'Model ready! Click Start Camera.';
         console.log('PoseLandmarker Initialization completed!');
-        
+
     } catch (error) {
         console.error('PoseLandmarker initialization failed:', error);
-        loadingText.textContent = 'Loading failed:' + error.message;
+        loadingText.textContent = 'Loading failed: ' + error.message;
     }
 };
 
@@ -545,6 +558,14 @@ function checkParticleInteractions(landmarks) {
             }
         }
         const colorIndex = getColorIndexFromHex(bodyNodeColor);
+
+        const fadeAlpha = colorIndex >= 0 ? getGroupFadeAlpha(colorIndex) : 0;
+        if (fadeAlpha <= 0) {
+            return;
+        }
+
+        const connectDistance = 42; // 更紧的连接半径
+        const repulsionDistance = 130; // 强烈排斥半径
 
         const fadeAlpha = colorIndex >= 0 ? getGroupFadeAlpha(colorIndex) : 0;
         if (fadeAlpha <= 0) {
