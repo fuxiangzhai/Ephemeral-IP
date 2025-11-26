@@ -544,6 +544,7 @@ function checkParticleInteractions(landmarks) {
                 break;
             }
         }
+        const colorIndex = getColorIndexFromHex(bodyNodeColor);
 
         const fadeAlpha = colorIndex >= 0 ? getGroupFadeAlpha(colorIndex) : 0;
         if (fadeAlpha <= 0) {
