@@ -2,7 +2,7 @@ import {
     PoseLandmarker,
     FilesetResolver,
     DrawingUtils
-} from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0";
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0";
 
 // 获取DOM元素
 const mainCanvas = document.getElementById("mainCanvas");
@@ -568,6 +568,25 @@ function checkParticleInteractions(landmarks) {
                 break;
             }
         }
+        
+        // colorIndex 最后统一从颜色反查
+        colorIndex = getColorIndexFromHex(bodyNodeColor);
+
+        const fadeAlpha = colorIndex >= 0 ? getGroupFadeAlpha(colorIndex) : 0;
+        if (fadeAlpha <= 0) {
+            return;
+        }
+
+        const connectDistance = 42; // 更紧的连接半径
+        const repulsionDistance = 130; // 强烈排斥半径
+
+        const fadeAlpha = colorIndex >= 0 ? getGroupFadeAlpha(colorIndex) : 0;
+        if (fadeAlpha <= 0) {
+            return;
+        }
+
+        const connectDistance = 42; // 更紧的连接半径
+        const repulsionDistance = 130; // 强烈排斥半径
 
         const fadeAlpha = colorIndex >= 0 ? getGroupFadeAlpha(colorIndex) : 0;
         if (fadeAlpha <= 0) {
