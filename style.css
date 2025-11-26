@@ -149,6 +149,10 @@ body {
   object-fit: cover;
 }
 
+.camera-preview video {
+  transform: scaleX(-1);
+}
+
 .camera-preview .preview-canvas {
   background: transparent;
 }

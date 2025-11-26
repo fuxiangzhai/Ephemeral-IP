@@ -584,24 +584,30 @@ function checkParticleInteractions(landmarks) {
     });
 }
 
-// MediaPipe Pose关键点颜色分组 (6种差异较大的颜色)
+// MediaPipe Pose关键点颜色分组（按照示例图的配色）
 const POSE_COLORS = [
-    '#FF4444', // 颜色1 - 鲜红色 (头部)
-    '#44FF44', // 颜色2 - 鲜绿色 (右胳膊)
-    '#4444FF', // 颜色3 - 鲜蓝色 (左胳膊)
-    '#FFFF44', // 颜色4 - 亮黄色 (腰部)
-    '#FF44FF', // 颜色5 - 品红色 (左腿)
-    '#44FFFF'  // 颜色6 - 青色 (右腿)
+    '#E53935', // 鼻子 - 红
+    '#E53935', // 左肩 - 红（与鼻子同色）
+    '#1E40FF', // 右手腕 - 蓝
+    '#18C065', // 左脚踝 - 绿
+    '#F28C28'  // 右脚踝 - 橙
 ];
 
-// 关键点分组定义 (只保留指定的关键点)
+// 关键点分组定义（只保留指定的关键点）
 const POSE_GROUPS = {
-    head: { indices: [0], colorIndex: 0, name: '头部' },
-    rightArm: { indices: [12, 14, 16, 18], colorIndex: 1, name: '右胳膊' },
-    leftArm: { indices: [11, 13, 15, 17], colorIndex: 2, name: '左胳膊' },
-    waist: { indices: [23, 24], colorIndex: 3, name: '腰部' },
-    rightLeg: { indices: [25, 27, 31], colorIndex: 4, name: '右腿' },
-    leftLeg: { indices: [26, 28, 32], colorIndex: 5, name: '左腿' }
+    nose: { indices: [0], colorIndex: 0, name: '鼻子' },
+    leftShoulder: { indices: [11], colorIndex: 1, name: '左肩' },
+    rightWrist: { indices: [16], colorIndex: 2, name: '右手腕' },
+    leftAnkle: { indices: [27], colorIndex: 3, name: '左脚踝' },
+    rightAnkle: { indices: [28], colorIndex: 4, name: '右脚踝' }
+};
+
+const LANDMARK_INDEX = {
+    nose: 0,
+    leftShoulder: 11,
+    rightWrist: 16,
+    leftAnkle: 27,
+    rightAnkle: 28
 };
 
 // 身体颜色组的褪色与成员追踪
@@ -658,16 +664,14 @@ const CUSTOM_CONNECTIONS = [
 
 // 绘制身体特征点（透明背景，只显示指定的关键点）
 function drawLandmarks(landmarks) {
-    // 始终清空画布（透明背景）
     mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
 
-    // 如果没有检测到身体关键点，不绘制任何东西
     if (!landmarks || landmarks.length === 0) {
         return;
     }
 
-    // 应用位置平滑以减少抖动
     const smoothedLandmarks = applySmoothing(landmarks);
+    const MIN_NODE_SIZE = 18;
 
     const palette = {
         head: '#E74C3C',
@@ -691,6 +695,34 @@ function drawLandmarks(landmarks) {
         };
     };
 
+    const nose = getPoint(0);
+    const leftShoulder = getPoint(11);
+    const rightWrist = getPoint(16);
+    const leftAnkle = getPoint(27);
+    const rightAnkle = getPoint(28);
+
+    const drawTriangle = (p1, p2, p3, color) => {
+        if (!p1 || !p2 || !p3) return;
+        mainCtx.save();
+        mainCtx.beginPath();
+        mainCtx.moveTo(p1.x, p1.y);
+        mainCtx.lineTo(p2.x, p2.y);
+        mainCtx.lineTo(p3.x, p3.y);
+        mainCtx.closePath();
+        mainCtx.fillStyle = color;
+        mainCtx.shadowColor = color;
+        mainCtx.shadowBlur = 14;
+        mainCtx.fill();
+        mainCtx.restore();
+    };
+
+    // 按示例配色绘制四个三角区域
+    drawTriangle(nose, leftShoulder, rightWrist, '#E53935');
+    drawTriangle(nose, leftShoulder, leftAnkle, '#18C065');
+    drawTriangle(nose, rightWrist, leftAnkle, '#1E40FF');
+    drawTriangle(leftShoulder, rightWrist, rightAnkle, '#F28C28');
+
+    // 绘制关键点 - 仅保留五个节点，颜色与示例一致且更大
     const drawPolygon = (points, fillColor, strokeColor, shadowColor) => {
         const validPoints = points.filter(Boolean);
         if (validPoints.length < 3) return;
@@ -822,6 +854,25 @@ function drawLandmarks(landmarks) {
         }
 
         group.indices.forEach(index => {
+            const landmark = smoothedLandmarks[index];
+            if (!landmark) return;
+            const visibility = landmark.visibility || 1;
+            const blendedAlpha = visibility * fadeAlpha;
+
+            if (blendedAlpha > 0.4 * fadeAlpha) {
+                const x = landmark.x * mainCanvas.width;
+                const y = landmark.y * mainCanvas.height;
+                const size = Math.max(bodyNodeSizes[index] || BASE_BODY_NODE_SIZE, MIN_NODE_SIZE);
+
+                mainCtx.save();
+                mainCtx.globalAlpha = blendedAlpha;
+                mainCtx.shadowColor = color;
+                mainCtx.shadowBlur = 20;
+                mainCtx.fillStyle = color;
+                mainCtx.beginPath();
+                mainCtx.arc(x, y, size, 0, Math.PI * 2);
+                mainCtx.fill();
+                mainCtx.restore();
             if (smoothedLandmarks[index]) {
                 const landmark = smoothedLandmarks[index];
                 const visibility = landmark.visibility || 1;
@@ -867,13 +918,12 @@ function drawLandmarks(landmarks) {
     }
 }
 
-// 绘制预览画布上的关节点
+// 绘制预览画布上的关节点（镜像显示以匹配摄像头预览）
 function drawPreviewLandmarks(landmarks) {
     if (!landmarks || landmarks.length === 0 || cameraPreview.style.display === 'none') {
         return;
     }
 
-    // 清空预览画布
     previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 
     const videoAspect = video.videoWidth / video.videoHeight;
@@ -881,41 +931,77 @@ function drawPreviewLandmarks(landmarks) {
 
     let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
 
-    // 计算视频在画布上的显示区域（保持比例）
     if (videoAspect > canvasAspect) {
-        // 视频更宽，以高度为准
         drawHeight = previewCanvas.height;
         drawWidth = drawHeight * videoAspect;
         offsetX = (previewCanvas.width - drawWidth) / 2;
     } else {
-        // 视频更高，以宽度为准
         drawWidth = previewCanvas.width;
         drawHeight = drawWidth / videoAspect;
         offsetY = (previewCanvas.height - drawHeight) / 2;
     }
 
-    // 绘制简化的关节点
-    for (const [groupName, group] of Object.entries(POSE_GROUPS)) {
+    const toMirroredPoint = (landmark) => {
+        if (!landmark) return null;
+        return {
+            x: offsetX + drawWidth - (landmark.x * drawWidth),
+            y: offsetY + (landmark.y * drawHeight)
+        };
+    };
+
+    const nodes = {
+        nose: toMirroredPoint(landmarks[0]),
+        leftShoulder: toMirroredPoint(landmarks[11]),
+        rightWrist: toMirroredPoint(landmarks[16]),
+        leftAnkle: toMirroredPoint(landmarks[27]),
+        rightAnkle: toMirroredPoint(landmarks[28])
+    };
+
+    const visibilityOK = (landmark) => (landmark?.visibility ?? 1) > 0.5;
+
+    const previewTriangles = [
+        ['nose', 'leftShoulder', 'rightWrist', '#E53935'],
+        ['nose', 'leftShoulder', 'leftAnkle', '#18C065'],
+        ['nose', 'rightWrist', 'leftAnkle', '#1E40FF'],
+        ['leftShoulder', 'rightWrist', 'rightAnkle', '#F28C28']
+    ];
+
+    previewTriangles.forEach(([a, b, c, color]) => {
+        const la = landmarks[LANDMARK_INDEX[a]];
+        const lb = landmarks[LANDMARK_INDEX[b]];
+        const lc = landmarks[LANDMARK_INDEX[c]];
+        if (nodes[a] && nodes[b] && nodes[c] && visibilityOK(la) && visibilityOK(lb) && visibilityOK(lc)) {
+            previewCtx.save();
+            previewCtx.beginPath();
+            previewCtx.moveTo(nodes[a].x, nodes[a].y);
+            previewCtx.lineTo(nodes[b].x, nodes[b].y);
+            previewCtx.lineTo(nodes[c].x, nodes[c].y);
+            previewCtx.closePath();
+            previewCtx.fillStyle = color;
+            previewCtx.globalAlpha = 0.85;
+            previewCtx.fill();
+            previewCtx.restore();
+        }
+    });
+
+    const MIN_PREVIEW_SIZE = 9;
+    for (const [key, point] of Object.entries(nodes)) {
+        const idx = LANDMARK_INDEX[key];
+        const landmark = landmarks[idx];
+        if (!point || !landmark || !visibilityOK(landmark)) continue;
+
+        const group = Object.values(POSE_GROUPS).find(g => g.indices.includes(idx));
+        if (!group) continue;
         const color = POSE_COLORS[group.colorIndex];
 
-        group.indices.forEach(index => {
-            if (landmarks[index]) {
-                const landmark = landmarks[index];
-                const visibility = landmark.visibility || 1;
-
-                if (visibility > 0.5) {
-                    // 将视频坐标转换为预览画布坐标
-                    const x = (landmark.x * drawWidth) + offsetX;
-                    const y = (landmark.y * drawHeight) + offsetY;
-
-                    // 绘制关节点
-                    previewCtx.fillStyle = color;
-                    previewCtx.beginPath();
-                    previewCtx.arc(x, y, 3, 0, Math.PI * 2); // 较小的节点
-                    previewCtx.fill();
-                }
-            }
-        });
+        previewCtx.save();
+        previewCtx.fillStyle = color;
+        previewCtx.shadowColor = color;
+        previewCtx.shadowBlur = 10;
+        previewCtx.beginPath();
+        previewCtx.arc(point.x, point.y, MIN_PREVIEW_SIZE, 0, Math.PI * 2);
+        previewCtx.fill();
+        previewCtx.restore();
     }
 }
 
