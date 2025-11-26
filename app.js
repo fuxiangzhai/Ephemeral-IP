@@ -589,7 +589,7 @@ const POSE_COLORS = [
     '#E53935', // 鼻子 - 红
     '#E53935', // 左肩 - 红（与鼻子同色）
     '#1E40FF', // 右手腕 - 蓝
-    '#18C065', // 左脚踝 - 绿
+    '#18C065', // 左脚前脚掌 - 绿
     '#F28C28'  // 右脚踝 - 橙
 ];
 
@@ -598,7 +598,7 @@ const POSE_GROUPS = {
     nose: { indices: [0], colorIndex: 0, name: '鼻子' },
     leftShoulder: { indices: [11], colorIndex: 1, name: '左肩' },
     rightWrist: { indices: [16], colorIndex: 2, name: '右手腕' },
-    leftAnkle: { indices: [27], colorIndex: 3, name: '左脚踝' },
+    leftFoot: { indices: [31], colorIndex: 3, name: '左脚前脚掌' },
     rightAnkle: { indices: [28], colorIndex: 4, name: '右脚踝' }
 };
 
@@ -606,9 +606,11 @@ const LANDMARK_INDEX = {
     nose: 0,
     leftShoulder: 11,
     rightWrist: 16,
-    leftAnkle: 27,
+    leftFoot: 31,
     rightAnkle: 28
 };
+
+const LEFT_FOOT_ART_OFFSET = 26; // 左脚节点在视觉上下移制造与右脚的高度差
 
 // 身体颜色组的褪色与成员追踪
 const GROUP_FADE_DURATION = 5 * 60 * 1000; // 5分钟
@@ -648,20 +650,6 @@ function getColorIndexFromHex(color) {
     return POSE_COLORS.indexOf(color);
 }
 
-// 自定义连接线 (只保留指定关键点之间的连接)
-const CUSTOM_CONNECTIONS = [
-    // 右胳膊连接
-    [12, 14], [14, 16], [16, 18],
-    // 左胳膊连接
-    [11, 13], [13, 15], [15, 17],
-    // 腰部连接
-    [23, 24],
-    // 右腿连接 (从腰部开始)
-    [24, 25], [25, 27], [27, 31],
-    // 左腿连接 (从腰部开始)
-    [23, 26], [26, 28], [28, 32]
-];
-
 // 绘制身体特征点（透明背景，只显示指定的关键点）
 function drawLandmarks(landmarks) {
     mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
@@ -673,33 +661,24 @@ function drawLandmarks(landmarks) {
     const smoothedLandmarks = applySmoothing(landmarks);
     const MIN_NODE_SIZE = 18;
 
-    const palette = {
-        head: '#E74C3C',
-        torso: '#F39C12',
-        leftArm: '#2ECC71',
-        rightArm: '#2D6CFF',
-        leftLeg: '#9B59B6',
-        rightLeg: '#16C1C8',
-        scribble: 'rgba(230, 230, 230, 0.9)'
-    };
-
     const getPoint = (index) => {
         const landmark = smoothedLandmarks[index];
         if (!landmark) return null;
         const visibility = landmark.visibility ?? 1;
         if (visibility < 0.4) return null;
+        const artOffsetY = index === LANDMARK_INDEX.leftFoot ? LEFT_FOOT_ART_OFFSET : 0;
         return {
             x: landmark.x * mainCanvas.width,
-            y: landmark.y * mainCanvas.height,
+            y: landmark.y * mainCanvas.height + artOffsetY,
             visibility
         };
     };
 
-    const nose = getPoint(0);
-    const leftShoulder = getPoint(11);
-    const rightWrist = getPoint(16);
-    const leftAnkle = getPoint(27);
-    const rightAnkle = getPoint(28);
+    const nose = getPoint(LANDMARK_INDEX.nose);
+    const leftShoulder = getPoint(LANDMARK_INDEX.leftShoulder);
+    const rightWrist = getPoint(LANDMARK_INDEX.rightWrist);
+    const leftFoot = getPoint(LANDMARK_INDEX.leftFoot);
+    const rightAnkle = getPoint(LANDMARK_INDEX.rightAnkle);
 
     const drawTriangle = (p1, p2, p3, color) => {
         if (!p1 || !p2 || !p3) return;
@@ -718,133 +697,11 @@ function drawLandmarks(landmarks) {
 
     // 按示例配色绘制四个三角区域
     drawTriangle(nose, leftShoulder, rightWrist, '#E53935');
-    drawTriangle(nose, leftShoulder, leftAnkle, '#18C065');
-    drawTriangle(nose, rightWrist, leftAnkle, '#1E40FF');
+    drawTriangle(nose, leftShoulder, leftFoot, '#18C065');
+    drawTriangle(nose, rightWrist, leftFoot, '#1E40FF');
     drawTriangle(leftShoulder, rightWrist, rightAnkle, '#F28C28');
 
     // 绘制关键点 - 仅保留五个节点，颜色与示例一致且更大
-    const drawPolygon = (points, fillColor, strokeColor, shadowColor) => {
-        const validPoints = points.filter(Boolean);
-        if (validPoints.length < 3) return;
-
-        mainCtx.save();
-        mainCtx.lineJoin = 'round';
-        mainCtx.lineCap = 'round';
-
-        if (shadowColor) {
-            mainCtx.shadowColor = shadowColor;
-            mainCtx.shadowBlur = 15;
-        }
-
-        mainCtx.beginPath();
-        mainCtx.moveTo(validPoints[0].x, validPoints[0].y);
-        validPoints.slice(1).forEach(p => mainCtx.lineTo(p.x, p.y));
-        mainCtx.closePath();
-        mainCtx.fillStyle = fillColor;
-        mainCtx.fill();
-
-        if (strokeColor) {
-            mainCtx.lineWidth = 6;
-            mainCtx.shadowBlur = 0;
-            mainCtx.strokeStyle = strokeColor;
-            mainCtx.stroke();
-        }
-
-        mainCtx.restore();
-    };
-
-    const lerp = (a, b, t) => ({
-        x: a.x + (b.x - a.x) * t,
-        y: a.y + (b.y - a.y) * t
-    });
-
-    const leftShoulder = getPoint(11);
-    const rightShoulder = getPoint(12);
-    const leftHip = getPoint(23);
-    const rightHip = getPoint(24);
-    const leftElbow = getPoint(13);
-    const rightElbow = getPoint(14);
-    const leftWrist = getPoint(15);
-    const rightWrist = getPoint(16);
-    const leftKnee = getPoint(25);
-    const rightKnee = getPoint(26);
-    const leftAnkle = getPoint(27);
-    const rightAnkle = getPoint(28);
-    const nose = getPoint(0);
-    const leftEar = getPoint(7) || leftShoulder;
-    const rightEar = getPoint(8) || rightShoulder;
-
-    mainCtx.save();
-    mainCtx.lineJoin = 'round';
-    mainCtx.lineCap = 'round';
-
-    // 身体灰色涂鸦感的骨架
-    if (leftShoulder && rightShoulder && leftHip && rightHip) {
-        const spineTop = lerp(leftShoulder, rightShoulder, 0.5);
-        const spineBottom = lerp(leftHip, rightHip, 0.5);
-        const horizontal = (() => {
-            const dx = rightShoulder.x - leftShoulder.x;
-            const dy = rightShoulder.y - leftShoulder.y;
-            const len = Math.hypot(dx, dy) || 1;
-            return { x: dx / len, y: dy / len };
-        })();
-
-        const segments = 16;
-        const amplitude = Math.max(Math.hypot(rightShoulder.x - leftShoulder.x, rightShoulder.y - leftShoulder.y) * 0.45, 40);
-
-        mainCtx.beginPath();
-        for (let i = 0; i <= segments; i++) {
-            const t = i / segments;
-            const base = lerp(spineTop, spineBottom, t);
-            const taper = 1 - Math.abs(0.5 - t) * 1.5;
-            const wave = (i % 2 === 0 ? 1 : -1) * (0.6 + Math.abs(Math.sin(i * 2.1)) * 0.4);
-            const offset = amplitude * taper * wave * 0.35;
-            const x = base.x + horizontal.x * offset;
-            const y = base.y + horizontal.y * offset;
-            if (i === 0) {
-                mainCtx.moveTo(x, y);
-            } else {
-                mainCtx.lineTo(x, y);
-            }
-        }
-
-        mainCtx.strokeStyle = palette.scribble;
-        mainCtx.lineWidth = 12;
-        mainCtx.shadowColor = 'rgba(200, 200, 200, 0.35)';
-        mainCtx.shadowBlur = 18;
-        mainCtx.stroke();
-    }
-
-    // 躯干部抽象三角形
-    if (leftShoulder && rightShoulder && leftHip && rightHip) {
-        const hipCenter = lerp(leftHip, rightHip, 0.5);
-        drawPolygon([leftShoulder, rightShoulder, hipCenter], palette.torso, '#FFC870', 'rgba(243, 156, 18, 0.6)');
-    }
-
-    // 头部的红色小三角
-    if (nose && leftEar && rightEar) {
-        drawPolygon([nose, leftEar, rightEar], palette.head, '#F9C0B3', 'rgba(231, 76, 60, 0.5)');
-    }
-
-    // 手臂抽象色块
-    drawPolygon([leftShoulder, leftElbow, leftWrist], palette.leftArm, '#8EF1B1', 'rgba(46, 204, 113, 0.5)');
-    drawPolygon([rightShoulder, rightElbow, rightWrist], palette.rightArm, '#9AB8FF', 'rgba(45, 108, 255, 0.4)');
-
-    // 腿部抽象色块
-    drawPolygon([leftHip, leftKnee, leftAnkle], palette.leftLeg, '#D5B0EA', 'rgba(155, 89, 182, 0.5)');
-    drawPolygon([rightHip, rightKnee, rightAnkle], palette.rightLeg, '#8BE8F0', 'rgba(22, 193, 200, 0.45)');
-
-    // 对角线强调三角形，让视觉更有交错感
-    if (leftShoulder && rightHip && leftAnkle) {
-        drawPolygon([leftShoulder, rightHip, leftAnkle], 'rgba(255, 210, 77, 0.55)', '#FFEFA3', 'rgba(255, 210, 77, 0.5)');
-    }
-    if (rightShoulder && leftHip && rightAnkle) {
-        drawPolygon([rightShoulder, leftHip, rightAnkle], 'rgba(52, 152, 219, 0.5)', '#BBDDF5', 'rgba(52, 152, 219, 0.45)');
-    }
-
-    mainCtx.restore();
-
-    // 绘制关键点 - 圆形节点保留互动颜色，呼应抽象图形
     for (const [groupName, group] of Object.entries(POSE_GROUPS)) {
         const color = POSE_COLORS[group.colorIndex];
         const fadeAlpha = getGroupFadeAlpha(group.colorIndex);
@@ -861,7 +718,7 @@ function drawLandmarks(landmarks) {
 
             if (blendedAlpha > 0.4 * fadeAlpha) {
                 const x = landmark.x * mainCanvas.width;
-                const y = landmark.y * mainCanvas.height;
+                const y = landmark.y * mainCanvas.height + (index === LANDMARK_INDEX.leftFoot ? LEFT_FOOT_ART_OFFSET : 0);
                 const size = Math.max(bodyNodeSizes[index] || BASE_BODY_NODE_SIZE, MIN_NODE_SIZE);
 
                 mainCtx.save();
@@ -873,46 +730,6 @@ function drawLandmarks(landmarks) {
                 mainCtx.arc(x, y, size, 0, Math.PI * 2);
                 mainCtx.fill();
                 mainCtx.restore();
-            if (smoothedLandmarks[index]) {
-                const landmark = smoothedLandmarks[index];
-                const visibility = landmark.visibility || 1;
-
-                const blendedAlpha = visibility * fadeAlpha;
-
-                if (blendedAlpha > 0.5 * fadeAlpha) {
-                    const x = landmark.x * mainCanvas.width;
-                    const y = landmark.y * mainCanvas.height;
-
-                    // 使用动态大小（基于吸收的粒子数量）
-                    const size = bodyNodeSizes[index] || BASE_BODY_NODE_SIZE;
-
-                    mainCtx.save();
-                    mainCtx.globalAlpha = blendedAlpha;
-
-                    // 绘制发光外圈
-                    mainCtx.shadowColor = color;
-                    mainCtx.shadowBlur = 18;
-                    mainCtx.fillStyle = color;
-                    mainCtx.beginPath();
-                    mainCtx.arc(x, y, size, 0, Math.PI * 2);
-                    mainCtx.fill();
-
-                    // 绘制实心内圈
-                    mainCtx.shadowColor = 'transparent';
-                    mainCtx.shadowBlur = 0;
-                    mainCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                    mainCtx.beginPath();
-                    mainCtx.arc(x, y, size * 0.65, 0, Math.PI * 2);
-                    mainCtx.fill();
-
-                    // 添加白色高光
-                    mainCtx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-                    mainCtx.beginPath();
-                    mainCtx.arc(x - size * 0.25, y - size * 0.25, size * 0.28, 0, Math.PI * 2);
-                    mainCtx.fill();
-
-                    mainCtx.restore();
-                }
             }
         });
     }
@@ -950,19 +767,23 @@ function drawPreviewLandmarks(landmarks) {
     };
 
     const nodes = {
-        nose: toMirroredPoint(landmarks[0]),
-        leftShoulder: toMirroredPoint(landmarks[11]),
-        rightWrist: toMirroredPoint(landmarks[16]),
-        leftAnkle: toMirroredPoint(landmarks[27]),
-        rightAnkle: toMirroredPoint(landmarks[28])
+        nose: toMirroredPoint(landmarks[LANDMARK_INDEX.nose]),
+        leftShoulder: toMirroredPoint(landmarks[LANDMARK_INDEX.leftShoulder]),
+        rightWrist: toMirroredPoint(landmarks[LANDMARK_INDEX.rightWrist]),
+        leftFoot: toMirroredPoint(landmarks[LANDMARK_INDEX.leftFoot]),
+        rightAnkle: toMirroredPoint(landmarks[LANDMARK_INDEX.rightAnkle])
     };
+
+    if (nodes.leftFoot) {
+        nodes.leftFoot.y += LEFT_FOOT_ART_OFFSET;
+    }
 
     const visibilityOK = (landmark) => (landmark?.visibility ?? 1) > 0.5;
 
     const previewTriangles = [
         ['nose', 'leftShoulder', 'rightWrist', '#E53935'],
-        ['nose', 'leftShoulder', 'leftAnkle', '#18C065'],
-        ['nose', 'rightWrist', 'leftAnkle', '#1E40FF'],
+        ['nose', 'leftShoulder', 'leftFoot', '#18C065'],
+        ['nose', 'rightWrist', 'leftFoot', '#1E40FF'],
         ['leftShoulder', 'rightWrist', 'rightAnkle', '#F28C28']
     ];
 
