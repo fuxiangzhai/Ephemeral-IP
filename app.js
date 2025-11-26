@@ -2,7 +2,7 @@ import {
     PoseLandmarker,
     FilesetResolver,
     DrawingUtils
-} from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0";
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0";
 
 // 获取DOM元素
 const mainCanvas = document.getElementById("mainCanvas");
@@ -341,8 +341,10 @@ function applySmoothing(currentLandmarks) {
     return smoothed;
 }
 
-const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
-const WASM_ASSETS_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm";
+const MEDIAPIPE_VERSION = "0.10.0";
+const MEDIAPIPE_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}`;
+const POSE_MODEL_URL = `${MEDIAPIPE_BASE}/wasm/pose_landmarker_lite.task`;
+const WASM_ASSETS_URL = `${MEDIAPIPE_BASE}/wasm`;
 
 // 初始化MediaPipe，支持 GPU -> CPU 的自动降级，避免模型加载卡住
 const createPoseLandmarker = async () => {
