@@ -341,10 +341,18 @@ function applySmoothing(currentLandmarks) {
     return smoothed;
 }
 
-const MEDIAPIPE_VERSION = "0.10.0";
-const MEDIAPIPE_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}`;
-const POSE_MODEL_URL = `${MEDIAPIPE_BASE}/wasm/pose_landmarker_lite.task`;
-const WASM_ASSETS_URL = `${MEDIAPIPE_BASE}/wasm`;
+// 归一化坐标镜像到画布坐标（保持与预览一致的镜像方向）
+function toMirroredCanvasPoint(landmark, canvasHeightMultiplier = mainCanvas.height) {
+    if (!landmark) return null;
+    return {
+        x: mainCanvas.width - (landmark.x * mainCanvas.width),
+        y: landmark.y * canvasHeightMultiplier,
+        visibility: landmark.visibility ?? 1
+    };
+}
+
+const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+const WASM_ASSETS_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm";
 
 // 初始化MediaPipe，支持 GPU -> CPU 的自动降级，避免模型加载卡住
 const createPoseLandmarker = async () => {
@@ -540,9 +548,10 @@ function checkParticleInteractions(landmarks) {
     const smoothed = applySmoothing(landmarks);
 
     smoothed.forEach((landmark, index) => {
-        // 将归一化坐标转换为画布坐标
-        const x = landmark.x * mainCanvas.width;
-        const y = landmark.y * mainCanvas.height;
+        // 将归一化坐标转换为镜像后的画布坐标
+        const mirroredPoint = toMirroredCanvasPoint(landmark);
+        const x = mirroredPoint.x;
+        const y = mirroredPoint.y + (index === LANDMARK_INDEX.leftFoot ? LEFT_FOOT_ART_OFFSET : 0);
 
         // 初始化身体节点大小
         if (!bodyNodeSizes[index]) {
@@ -550,12 +559,12 @@ function checkParticleInteractions(landmarks) {
         }
 
         // 获取身体节点的颜色
-        let bodyNodeColor = '#FFFFFF'; 
+        let bodyNodeColor = '#FFFFFF'; // 默认白色
         let colorIndex = -1;
-        
         for (const group of Object.values(POSE_GROUPS)) {
             if (group.indices.includes(index)) {
                 bodyNodeColor = POSE_COLORS[group.colorIndex];
+                colorIndex = group.colorIndex;
                 break;
             }
         }
@@ -577,6 +586,14 @@ function checkParticleInteractions(landmarks) {
         }
 
         const connectDistance = 42; // 更紧的连接半径
+        const repulsionDistance = 130; // 强烈排斥半径
+
+        const fadeAlpha = colorIndex >= 0 ? getGroupFadeAlpha(colorIndex) : 0;
+        if (fadeAlpha <= 0) {
+            return;
+        }
+
+        const connectDistance = 68; // 放宽连接半径以增强互动可见性
         const repulsionDistance = 130; // 强烈排斥半径
 
         particles.forEach(particle => {
@@ -693,7 +710,7 @@ function checkParticleInteractions(landmarks) {
 }
 
 // 身体颜色组的褪色与成员追踪
-const GROUP_FADE_DURATION = 5 * 60 * 1000; // 5分钟
+const GROUP_FADE_DURATION = 8 * 60 * 1000; // 8分钟，延长褪色时间
 const bodyGroupTimers = POSE_COLORS.map(() => ({
     lastRefresh: performance.now(),
     particles: new Set()
@@ -747,9 +764,10 @@ function drawLandmarks(landmarks) {
         const visibility = landmark.visibility ?? 1;
         if (visibility < 0.4) return null;
         const artOffsetY = index === LANDMARK_INDEX.leftFoot ? LEFT_FOOT_ART_OFFSET : 0;
+        const mirrored = toMirroredCanvasPoint(landmark);
         return {
-            x: landmark.x * mainCanvas.width,
-            y: landmark.y * mainCanvas.height + artOffsetY,
+            x: mirrored.x,
+            y: mirrored.y + artOffsetY,
             visibility
         };
     };
@@ -797,14 +815,17 @@ function drawLandmarks(landmarks) {
             const blendedAlpha = visibility * fadeAlpha;
 
             if (blendedAlpha > 0.4 * fadeAlpha) {
-                const x = landmark.x * mainCanvas.width;
-                const y = landmark.y * mainCanvas.height + (index === LANDMARK_INDEX.leftFoot ? LEFT_FOOT_ART_OFFSET : 0);
+                const mirrored = toMirroredCanvasPoint(landmark);
+                const x = mirrored.x;
+                const y = mirrored.y + (index === LANDMARK_INDEX.leftFoot ? LEFT_FOOT_ART_OFFSET : 0);
                 const size = Math.max(bodyNodeSizes[index] || BASE_BODY_NODE_SIZE, MIN_NODE_SIZE);
+                const depthBoost = 0.25;
+                const nodeAlpha = Math.min(1, blendedAlpha + depthBoost);
 
                 mainCtx.save();
-                mainCtx.globalAlpha = blendedAlpha;
+                mainCtx.globalAlpha = nodeAlpha;
                 mainCtx.shadowColor = color;
-                mainCtx.shadowBlur = 20;
+                mainCtx.shadowBlur = 24;
                 mainCtx.fillStyle = color;
                 mainCtx.beginPath();
                 mainCtx.arc(x, y, size, 0, Math.PI * 2);
@@ -923,7 +944,7 @@ function drawBodyParticleConnections() {
         gradient.addColorStop(1, `${color}00`);
 
         particleCtx.globalAlpha = alpha * groupAlpha;
-        particleCtx.lineWidth = 2.4;
+        particleCtx.lineWidth = 3.2;
         particleCtx.strokeStyle = gradient;
         particleCtx.shadowColor = color;
         particleCtx.shadowBlur = 18;
@@ -935,8 +956,8 @@ function drawBodyParticleConnections() {
 
         // 夸张的能量波纹
         const ripple = 6 + Math.sin(connectionTime * 0.08) * 3;
-        particleCtx.lineWidth = 1.4;
-        particleCtx.globalAlpha = 0.35 * groupAlpha;
+        particleCtx.lineWidth = 1.6;
+        particleCtx.globalAlpha = 0.45 * groupAlpha;
         particleCtx.beginPath();
         particleCtx.moveTo(bodyX, bodyY);
         particleCtx.lineTo((bodyX + particleX) / 2 + ripple, (bodyY + particleY) / 2 - ripple);
