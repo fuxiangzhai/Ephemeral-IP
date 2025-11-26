@@ -550,16 +550,18 @@ function checkParticleInteractions(landmarks) {
         }
 
         // 获取身体节点的颜色
-        let bodyNodeColor = '#FFFFFF'; // 默认白色
+        let bodyNodeColor = '#FFFFFF'; 
         let colorIndex = -1;
+        
         for (const group of Object.values(POSE_GROUPS)) {
             if (group.indices.includes(index)) {
                 bodyNodeColor = POSE_COLORS[group.colorIndex];
-                colorIndex = group.colorIndex;
                 break;
             }
         }
-        const colorIndex = getColorIndexFromHex(bodyNodeColor);
+        
+        // colorIndex 最后统一从颜色反查
+        colorIndex = getColorIndexFromHex(bodyNodeColor);
 
         const fadeAlpha = colorIndex >= 0 ? getGroupFadeAlpha(colorIndex) : 0;
         if (fadeAlpha <= 0) {
