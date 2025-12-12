@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ephemeral-IP</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 全屏游戏界面 -->
+  <div id="gameContainer" class="game-container">
+    <!-- 背景文字 -->
+    <div class="title-text">Ephemeral-IP</div>
+
+    <!-- 隐藏的视频元素 -->
+    <video id="webcam" autoplay playsinline style="display: none;"></video>
+
+    <!-- 主画布 - 显示特征点和漂浮点 -->
+    <canvas id="mainCanvas" class="main-canvas"></canvas>
+
+    <!-- 漂浮点画布 -->
+    <canvas id="particleCanvas" class="particle-canvas"></canvas>
+
+    <!-- 摄像头预览 -->
+    <div id="cameraPreview" class="camera-preview">
+      <video id="previewVideo" autoplay playsinline muted></video>
+      <canvas id="previewCanvas" class="preview-canvas"></canvas>
+    </div>
+
+    <!-- 控制按钮 -->
+    <div class="controls">
+      <button id="webcamButton" class="control-button">Start Camera</button>
+      <button id="instantDeathButton" class="control-button">Instant Death</button>
+      <div id="loading" class="loading-text">Loading model...</div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
