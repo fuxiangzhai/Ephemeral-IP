@@ -1,26 +1,24 @@
 # Ephemeral-IP
 
-一种将人体姿态识别、粒子物理与多种艺术化连线预设结合的交互式可视化实验。支持实时身体追踪、粒子吸附/排斥、用户名与对话泡，以及多风格“身体”外观。
+An interactive experiment that blends pose tracking, particle physics, and multiple artistic “body” presets. It supports real-time body tracking, particle absorption/repulsion, username bubbles, and several visual styles.
 
-## ✨ 主要特性
+## ✨ Key Features
+- **Real-time pose tracking**: MediaPipe Tasks Vision, focusing on 5 keypoints (nose, left shoulder, right wrist, left foot, right ankle).
+- **Body presets (random each spawn)**: `tri_glass` (glass triangles), `spring` (springs), `tube` (dual-layer glass tubes), `goo` (central goo shape fit), `dots` (dot chains).
+- **Particle system**: 7 colors for free particles (5 body colors + 2 extras), with collision, attraction/repulsion, gravity collapse, and respawn.
+- **Random body colors**: The 5 body colors are shuffled every spawn; body spheres use 3D glassy shading.
+- **Usernames & speech bubbles**: Free particles can pick up historical usernames; when connecting, they exchange English greetings plus “I was here X minute(s) ago.”
+- **Name database**: Up to 50 historical names, circular buffer; particles won’t reuse names already in the scene.
+- **Lifespan & respawn**: Body groups fade out in 15–25s; when all expire, the body dies, particles collapse, and respawn after 15s.
+- **Debug control**: “Instant Death” button to immediately kill the current body and trigger respawn cooldown.
+- **UI toggle**: Spacebar hides/shows the control buttons.
 
-- **实时姿态追踪**：基于 MediaPipe Tasks Vision，核心 5 个关键点（鼻子、左肩、右手腕、左脚、右脚）
-- **多风格身体预设**（每次重生随机）：`tri_glass` 玻璃三角、`spring` 弹簧、`tube` 双层玻璃管、`goo` 中心黏液拟合、`dots` 点阵
-- **粒子系统**：7 色自由粒子（含 5 个身体色 + 2 个额外色），带碰撞、吸附、排斥、重力坠落
-- **身体节点颜色随机**：身体 5 色每次重生随机打散，节点球体 3D 玻璃感渲染
-- **用户名与对话泡**：自由粒子小概率拾取历史用户名；连接时生成双向英文问候+时间信息
-- **名库循环**：最多 50 条历史用户名，满后循环覆盖；粒子不会重复使用场景内已占用的名字
-- **重生与坠落**：节点计时 15–25 秒；全部到期则身体死亡，粒子统一坠落，15 秒后重生
-- **调试按钮**：Instant Death 可立即触发死亡与重生流程
-- **UI 隐藏**：空格键可隐藏/显示控制按钮区域
-
-## 🚀 快速开始
-
-### 🌐 线上体验
+## 🚀 Quick Start
+### Live Demo
 [https://fuxiangzhai.github.io/Ephemeral-IP/](https://fuxiangzhai.github.io/Ephemeral-IP/)
 
-### 💻 本地运行
-1. 启动本地 HTTP 服务（需 ES6 module 支持）：
+### Run Locally
+1) Start a local HTTP server (ES6 modules required):
    - Python 3:
      ```bash
      python3 -m http.server 8000
@@ -29,27 +27,29 @@
      ```bash
      npx http-server -p 8000
      ```
-2. 浏览器打开 `http://localhost:8000`
+2) Open `http://localhost:8000` in your browser.
 
-## 🎮 交互与控制
-- **Start Camera**：启动/停止摄像头与追踪
-- **Instant Death**：立即让当前身体死亡并进入重生冷却
-- **Space**：隐藏/显示控制按钮 UI
+## 🎮 Controls
+- **Start Camera**: Toggle camera and tracking.
+- **Instant Death**: Immediately kill the current body (useful for quick respawn tests).
+- **Space**: Hide/show the controls UI.
 
-## 🧠 运行机制简述
-- **身体预设**：每次 `startNewBodySession` 随机选择一种预设（并有轮换机制避免重复）
-- **节点计时**：每个颜色组 15–25 秒，倒计时结束颜色变灰；全组结束判定为死亡
-- **重生**：死亡后 15 秒重生，重置颜色、预设、用户名、脚偏移、手部插值等
-- **粒子**：自由漂浮、碰撞、越界重生；连接后可坠落；不受 UI 隐藏影响
-- **用户名/对话**：粒子 1.5%×已存名数量 概率拾取未占用的历史名，连接时弹英文问候并显示“X minute(s) ago”
+## 🧠 How It Works
+- **Preset selection**: Each `startNewBodySession` cycles and random-picks from the preset list (logged as `[Body Preset] ...` in console).
+- **Node timers**: Each body color group lives 15–25s; when all are expired, the body is considered dead.
+- **Respawn**: 15s cooldown after death; colors, preset, username, foot offsets, and hand blends are refreshed.
+- **Particles**: Free-floating, collide, respawn on bounds; connected ones can collapse with gravity on body death.
+- **Usernames & greetings**: A free particle picks a name with probability `1.5% * existing_names` (capped by availability). Names already in-scene are skipped. Greetings are English and include “I was here X minute(s) ago.”
 
-## 🛠️ 技术栈
-- MediaPipe Tasks Vision (Pose) + HTML5 Canvas
-- 纯 JavaScript（无框架依赖）
+## 🛠️ Tech Stack
+- MediaPipe Tasks Vision (Pose)
+- HTML5 Canvas
+- Vanilla JavaScript
 
-## ⚙️ 性能提示
-- 现代浏览器可 60fps 运行
-- 如遇性能瓶颈，可降低分辨率或粒子数量（`particleCount`）  
+## ⚙️ Performance Notes
+- Optimized for 60fps on modern browsers.
+- If performance drops, lower resolution or reduce `particleCount`.
 
-## 📜 许可证
-本项目为课程/实验用途，按仓库 License 使用。***
+## 📜 License
+For course/experimental use. Follow the repository license.***
+
